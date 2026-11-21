@@ -1,0 +1,36 @@
+{
+  "all_unique_plaintext_bodies": 36078,
+  "bodies_by_kind": {
+    "agent_delivery": 2468,
+    "agent_message": 1885,
+    "assignment": 2029,
+    "cached_agent_message": 653,
+    "cached_worker_report": 662,
+    "completion_notification": 1090,
+    "peer_thread_request": 7,
+    "worker_assistant_output": 14905,
+    "worker_commentary": 25127,
+    "worker_final_answer": 6092,
+    "worker_report": 2249
+  },
+  "bodies_by_project": {
+    ".agents": 541,
+    "No project": 26,
+    "ai-assistant": 23116,
+    "atelier": 11137,
+    "dc34": 46,
+    "team-standup": 400,
+    "unknown": 812
+  },
+  "generated_at": "2026-11-21T21:44:14.880567+00:00",
+  "notes": [
+    "Kind and project counts overlap when a body has multiple observations.",
+    "This is an unlabeled corpus, not a classifier scorecard.",
+    "Raw text and detailed provenance remain local in data/private."
+  ],
+  "plaintext_observations": 86004,
+  "primary_input_body_count": 3464,
+  "rollout_files_scanned": 3845,
+  "unique_opaque_payloads": 18739,
+  "unique_plaintext_bodies": 36078
+}
