@@ -323,3 +323,54 @@ fn t3_delegation_tools_and_every_text_field_are_checked() {
         json!({})
     );
 }
+
+/// The events Codex 0.171.0 sent for a `t3-code` stdio MCP server, in code mode
+/// and as direct function calls alike: the server name is normalized to
+/// `t3_code` and `tool_input` is the argument object, not a JSON string.
+#[test]
+fn codex_mcp_events_for_t3_code_tools() {
+    let long = "Please read the fixture notes first. ".repeat(250);
+    let event = |tool: &str, input: serde_json::Value| {
+        json!({
+            "session_id": "fixture-session",
+            "turn_id": "fixture-turn",
+            "transcript_path": "/tmp/fixture/rollout.jsonl",
+            "cwd": "/tmp/fixture",
+            "hook_event_name": "PreToolUse",
+            "model": "gpt-6.1-sol",
+            "permission_mode": "bypassPermissions",
+            "tool_name": format!("mcp__t3_code__{tool}"),
+            "tool_input": input,
+            "tool_use_id": "exec-fixture",
+        })
+    };
+    for (tool, allowed, denied) in [
+        (
+            "delegate_task",
+            json!({"task": "Please check the fixture greeting and reply with OK."}),
+            json!({"task": long}),
+        ),
+        (
+            "t3_thread_send",
+            json!({"threadId": "fixture-thread", "message": "Please confirm the thread is idle."}),
+            json!({"threadId": "fixture-thread", "message": long}),
+        ),
+        (
+            "t3_thread_launch",
+            json!({"title": "Fixture launch", "message": "Please list the fixture files."}),
+            json!({"title": "Fixture launch", "message": long}),
+        ),
+        (
+            "t3_thread_launch",
+            json!({"title": "Fixture launch without a message"}),
+            json!({"title": "Fixture launch", "message": long}),
+        ),
+    ] {
+        assert_eq!(hook(&event(tool, allowed)), json!({}), "{tool} allowed");
+        assert_eq!(
+            hook(&event(tool, denied))["hookSpecificOutput"]["permissionDecision"],
+            "deny",
+            "{tool} denied"
+        );
+    }
+}

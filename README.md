@@ -64,6 +64,7 @@ node scripts/handoff.ts hook-test --scenario normal
 node scripts/handoff.ts hook-test --scenario startup-error
 node scripts/handoff.ts hook-test --scenario timeout
 node scripts/handoff.ts hook-test --scenario exit-one
+node scripts/handoff.ts hook-test --scenario mcp
 ```
 
 Node 24.13 runs the TypeScript research tools and integration harness. Rust
@@ -96,16 +97,27 @@ The guard matches tool names by suffix: `spawn_agent`, `send_message`,
 `send_input` and `followup_task` for Codex's own delegation, and
 `delegate_task`, `t3_thread_send` and `t3_thread_launch` for T3 Code's. That
 covers concatenated names such as `collaborationspawn_agent` and MCP names such
-as `mcp__t3-code__delegate_task`. It reads the `message`, `task` and `prompt`
+as `mcp__t3_code__delegate_task`. It reads the `message`, `task` and `prompt`
 strings and any text `items`, and checks them together, so text cannot hide in
 a second field. It does not execute or scan JavaScript to infer arguments;
 nested tool dispatch supplies the resolved values. A matching tool with no text
 is denied, except `t3_thread_launch`, which can start an idle thread.
 
-In the corpus, 87% of handoffs went through the T3 Code tools. The isolated
-integration suite below proves interception for Codex's own delegation tools
-only. Whether Codex fires `PreToolUse` for MCP tools such as
-`mcp__t3-code__delegate_task` has not been tested end to end.
+In the corpus, 87% of handoffs went through the T3 Code tools. Codex 0.171.0
+runs `PreToolUse` hooks for MCP tool calls, and a deny stops the call before it
+reaches the MCP server. The `mcp` integration scenario proves this with a local
+stdio MCP server named `t3-code` that records every call it receives. Codex
+normalizes the server name, so the hook sees `tool_name` values
+`mcp__t3_code__delegate_task`, `mcp__t3_code__t3_thread_send` and
+`mcp__t3_code__t3_thread_launch`. `tool_input` is the call's argument object as
+the model wrote it, for example `{"threadId": "…", "message": "…"}`. The
+scenario covers both ways Codex offers MCP tools to a model: as deferred
+`tools.mcp__t3_code__*` calls inside code mode's `exec` (the default for
+`gpt-6.1-sol`), and as plain function calls in a `mcp__t3_code` namespace (for a
+model such as `gpt-5.4` with code mode off). On both paths, allowed calls
+reached the server, denied calls did not, and the model received the guard's
+reason. The scenario does not run the real T3 Code server; if T3 registers its
+server under another name, only the `mcp__<server>__` prefix changes.
 
 Before relying on a different Codex version, rerun the isolated integration
 suite against it and verify a denial in the client where you activated the

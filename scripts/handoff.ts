@@ -54,7 +54,7 @@ review records RUN KIND [--key KEY]
 review message ID [--context ID]
 compact                    Remove obsolete runs and reclaim pages; stop dashboard first.
 export --snapshot PATH     Explicit ignored snapshot for external tools.
-hook-test [--scenario denied|normal|startup-error|timeout|exit-one]
+hook-test [--scenario denied|normal|startup-error|timeout|exit-one|mcp]
 
 Common: --database PATH --binary PATH --config PATH --help
 Controls remain files. Messages and derived records remain in ignored SQLite.

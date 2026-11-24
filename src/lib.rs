@@ -113,8 +113,9 @@ pub fn hook(event: &Value) -> Value {
 const GUIDANCE: &str = "A handoff should say what you want from the recipient first, give it what it needs and cannot look up, and read as plain English: whole words with spaces between them, whole sentences, and paths, commands and identifiers in backticks. Rewrite the message that way and send it again.";
 
 fn decision(reason: String) -> Value {
+    // Codex appends ". Tool: NAME" to the reason, so it must not end in a full stop.
     json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-        "permissionDecisionReason": reason}})
+        "permissionDecisionReason": reason.trim_end_matches('.')}})
 }
 
 pub fn deny(rule: &str, reason: &str) -> Value {
