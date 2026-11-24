@@ -1,0 +1,110 @@
+{
+  "scope": "all distinct plaintext handoff input bodies; worker output excluded",
+  "reviewed": 3464,
+  "expected": 3464,
+  "missing": 0,
+  "style_counts": {
+    "pathological": 851,
+    "ambiguous": 559,
+    "normal": 2054
+  },
+  "confidence_counts": {
+    "high": 2782,
+    "low": 239,
+    "medium": 443
+  },
+  "issue_counts": {
+    "glued_prose": 598,
+    "overcompressed": 1301
+  },
+  "heuristic_counts": {
+    "ordinary_candidate": 2247,
+    "suspicious": 1027,
+    "needs_context": 190
+  },
+  "style_by_heuristic": {
+    "ordinary_candidate": {
+      "ambiguous": 266,
+      "normal": 1750,
+      "pathological": 231
+    },
+    "needs_context": {
+      "normal": 118,
+      "pathological": 22,
+      "ambiguous": 50
+    },
+    "suspicious": {
+      "pathological": 598,
+      "ambiguous": 243,
+      "normal": 186
+    }
+  },
+  "size_policy": {
+    "over_character_policy": 8,
+    "over_word_policy": 0
+  },
+  "re_reviewed": 911,
+  "repair_reason_counts": {
+    "page_index_drift": 520,
+    "quarantined_primary_batch": 134,
+    "missing_primary_review": 146,
+    "calibration_audit": 111
+  },
+  "calibration_audit": {
+    "messages": 111,
+    "transitions": {
+      "normal -> pathological": 4,
+      "normal -> normal": 31,
+      "pathological -> pathological": 24,
+      "ambiguous -> ambiguous": 12,
+      "ambiguous -> normal": 7,
+      "ambiguous -> pathological": 16,
+      "pathological -> normal": 10,
+      "normal -> ambiguous": 3,
+      "pathological -> ambiguous": 4
+    },
+    "disagreements_retained_ambiguous": 44,
+    "selection": "two per available initial label per primary batch; stratified, not prevalence weighted"
+  },
+  "wrapper_family_consistency": {
+    "families": 2929,
+    "inconsistent_families": 103,
+    "bodies_retained_ambiguous": 206
+  },
+  "source_manifest_sha256": "51cb63c4810b3360f3033a058974d41b82a9faa394229e6e8b7bc0b5c42365a8",
+  "limitations": [
+    "Luna model triage, not human ground truth. Readability thresholds remain subjective.",
+    "Every input has a full-message review; re-review replaces quarantined mapping errors and fills missing primary labels.",
+    "All inputs are now exposed to triage; there is no untouched test set for new rule tuning.",
+    "Distinct bodies, not deliveries; wrapper-only variants count separately; size policy is separate from style."
+  ],
+  "wrapper_family_counts": {
+    "normal": 1773,
+    "ambiguous": 443,
+    "pathological": 713
+  },
+  "percentages": {
+    "pathological": 24.57,
+    "ambiguous": 16.14,
+    "normal": 59.3
+  },
+  "style_by_size_policy": {
+    "within_limits": {
+      "normal": 2054,
+      "ambiguous": 555,
+      "pathological": 847
+    },
+    "over_limits": {
+      "pathological": 4,
+      "ambiguous": 4
+    }
+  },
+  "date": "2026-11-23",
+  "spot_audit": {
+    "complete_messages_checked": 6,
+    "pathological_to_normal_corrections": 1,
+    "reviewer": "gpt-6.1-sol",
+    "note": "Small qualitative check; not an independent accuracy estimate."
+  },
+  "labels_sha256": "52d8a6b74f607619f7745a2a3e63e0a0927d05b9bc81372a07b8ee516528c2a5"
+}

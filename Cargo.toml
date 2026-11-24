@@ -1,0 +1,9 @@
+[package]
+name = "handoff-guard"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Conservative Codex PreToolUse handoff guard"
+
+[dependencies]
+serde_json = "1"

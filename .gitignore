@@ -3,3 +3,12 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# SQLite databases and journal/WAL sidecars are always local.
+*.sqlite*
+*.db
+*.db-*
+
+# Generated dashboard data and screenshots can contain corpus text.
+/dashboard/data/
+/dashboard/validation/

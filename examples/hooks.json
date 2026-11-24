@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*(spawn_agent|send_message|followup_task)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.local/bin/handoff-guard hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

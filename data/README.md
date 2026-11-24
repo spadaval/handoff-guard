@@ -54,3 +54,61 @@ Regeneration replaces the export. Save manual labels separately, keyed by
 
 [coverage.json](coverage.json) records aggregate counts for the prepared export
 without its raw message text. It is an inventory, not a classifier scorecard.
+
+## Guard evaluation
+
+`python3 scripts/evaluate_corpus.py prepare` freezes connected-thread splits
+before tuning; it refuses to overwrite `private/split.jsonl`. Threads sharing
+an exact body or sender/recipient relationship stay together. Bodies without
+thread provenance split by message hash. Component sizes can make the reserved
+body fraction differ substantially from 20%.
+
+Manual labels go in `private/labels.jsonl` as records with `message_id`,
+`style_label` (`normal`, `pathological`, or `ambiguous`), `reviewer`, `basis`,
+and `notes`. Keep review depth explicit. An unlabeled body is `unassessed`.
+Ambiguous labels do not enter style confusion counts. Size policy is reported
+separately from style labels.
+
+`python3 scripts/evaluate_corpus.py evaluate` runs the compiled release binary
+against the entire plaintext set and emits aggregate `evaluation.json` plus
+local-only `private/evaluation.jsonl`. See [the evidence report](../docs/evaluation.md)
+for annotation limits, reserved-set contamination, false positives and misses.
+Do not regenerate the corpus without preserving your labels and split ledger.
+
+## Full-input triage baseline
+
+The 23 November 2026 Python/Luna review covers all 3,464 handoff input bodies.
+See [the triage report](../docs/triage.md) and aggregate [triage.json](triage.json).
+The final full-message ledger is `private/triage-20261123/labels-full.jsonl`.
+It retains ambiguous reviewer and wrapper-family disagreements. First-pass
+batch outputs contain quarantined mapping errors and must not be used as final
+labels. The old 80-excerpt labels remain untouched.
+
+## Blind 6.1 Sol second pass
+
+The subsequent [Sol review](../docs/triage-sol.md) covers all 559 ambiguous
+bodies and seeded random samples of 100 normal and 100 pathological bodies.
+Aggregate transitions are in [triage-sol.json](triage-sol.json). Raw Sol labels
+and a separate provisional reconciliation are in
+`private/triage-sol-20261123/labels-sol.jsonl` and `labels-reconciled.jsonl`.
+The original Luna baseline is unchanged. The reconciliation mixes reviewed and
+unreviewed definite labels; its global counts are not an all-Sol census.
+
+## Context database and rubric pilot
+
+`private/handoffs.sqlite3` links exact bodies, original observations, recovered
+context, historical references, earlier labels and new context-dependent grades.
+See the [database guide](../docs/context-database.md). Observations can be mirrors;
+context rows are not asserted to be unique deliveries. Original exports and
+reserved splits are preserved.
+
+The [communication rubric](../docs/communication-rubric.md) separates purpose,
+information selection and clarity. The [initial pilot](../docs/context-pilot.md)
+reviews a frozen random sample of 30 distinct input bodies. Missing evidence
+remains unknown. It is neither a whole-corpus grade nor a hook evaluation.
+
+The local [dashboard](../docs/context-dashboard.md) reads `private/handoffs.sqlite3`
+through a read-only API. It requests paginated previews and selected details;
+there is no published corpus snapshot or per-message JSON directory.
+`private/dashboard.json` remains an optional analysis export. The user permits
+serving agent messages locally; keep raw text and database files out of Git.

@@ -1,0 +1,77 @@
+{
+  "codex_version": "codex-cli 0.169.0",
+  "provider": "loopback scripted Responses server; no remote model sampling",
+  "activation": "temporary CODEX_HOME only; no global configuration changes",
+  "scenarios": [
+    {
+      "scenario": "denied",
+      "codex_exit": 0,
+      "requests": 3,
+      "intercepted": [
+        {
+          "tool": "collaborationspawn_agent",
+          "characters": 52004
+        },
+        {
+          "tool": "collaborationspawn_agent",
+          "characters": 17
+        },
+        {
+          "tool": "collaborationsend_message",
+          "characters": 52004
+        },
+        {
+          "tool": "collaborationfollowup_task",
+          "characters": 52004
+        }
+      ],
+      "assertions_passed": true,
+      "binary_sha256": "31e4af9c1ba2450542e664ea5b65a14eaf8114ad69e18f3f287678c94bd29596"
+    },
+    {
+      "scenario": "normal",
+      "codex_exit": 0,
+      "requests": 4,
+      "intercepted": [
+        {
+          "tool": "collaborationspawn_agent",
+          "characters": 17
+        },
+        {
+          "tool": "collaborationsend_message",
+          "characters": 17
+        },
+        {
+          "tool": "collaborationfollowup_task",
+          "characters": 17
+        }
+      ],
+      "assertions_passed": true,
+      "binary_sha256": "31e4af9c1ba2450542e664ea5b65a14eaf8114ad69e18f3f287678c94bd29596"
+    },
+    {
+      "scenario": "startup-error",
+      "codex_exit": 0,
+      "requests": 3,
+      "intercepted": [],
+      "assertions_passed": true,
+      "binary_sha256": "31e4af9c1ba2450542e664ea5b65a14eaf8114ad69e18f3f287678c94bd29596"
+    },
+    {
+      "scenario": "timeout",
+      "codex_exit": 0,
+      "requests": 4,
+      "intercepted": [],
+      "assertions_passed": true,
+      "binary_sha256": "31e4af9c1ba2450542e664ea5b65a14eaf8114ad69e18f3f287678c94bd29596"
+    },
+    {
+      "scenario": "exit-one",
+      "codex_exit": 0,
+      "requests": 4,
+      "intercepted": [],
+      "assertions_passed": true,
+      "binary_sha256": "31e4af9c1ba2450542e664ea5b65a14eaf8114ad69e18f3f287678c94bd29596"
+    }
+  ]
+}

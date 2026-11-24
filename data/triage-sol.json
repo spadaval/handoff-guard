@@ -1,0 +1,87 @@
+{
+  "model": "gpt-6.1-sol",
+  "selected": 759,
+  "reviewed": 759,
+  "missing": 0,
+  "baseline_counts": {
+    "normal": 2054,
+    "ambiguous": 559,
+    "pathological": 851
+  },
+  "selection_counts": {
+    "ambiguous": 559,
+    "normal": 100,
+    "pathological": 100
+  },
+  "seed": 20261123,
+  "selection_method": "All ambiguous bodies; seeded uniform samples without replacement from sorted normal and pathological body IDs, in that stratum order.",
+  "transitions": {
+    "ambiguous": {
+      "normal": 320,
+      "ambiguous": 63,
+      "pathological": 176
+    },
+    "normal": {
+      "normal": 95,
+      "pathological": 4,
+      "ambiguous": 1
+    },
+    "pathological": {
+      "pathological": 60,
+      "normal": 33,
+      "ambiguous": 7
+    }
+  },
+  "gut_check": {
+    "normal": {
+      "sample_size": 100,
+      "same_label": 95,
+      "same_label_percent": 95.0,
+      "wilson_95_interval": [
+        0.8882,
+        0.9785
+      ],
+      "sol_labels": {
+        "normal": 95,
+        "pathological": 4,
+        "ambiguous": 1
+      }
+    },
+    "pathological": {
+      "sample_size": 100,
+      "same_label": 60,
+      "same_label_percent": 60.0,
+      "wilson_95_interval": [
+        0.502,
+        0.6906
+      ],
+      "sol_labels": {
+        "pathological": 60,
+        "normal": 33,
+        "ambiguous": 7
+      }
+    }
+  },
+  "confidence_counts": {
+    "medium": 150,
+    "high": 609
+  },
+  "baseline_labels_sha256": "52d8a6b74f607619f7745a2a3e63e0a0927d05b9bc81372a07b8ee516528c2a5",
+  "limitations": [
+    "Independent model judgments, not human ground truth; disagreement is not a proven error.",
+    "Ambiguous cohort is a census; definite-label gut checks are random samples of distinct bodies, not deliveries.",
+    "Within-stratum intervals do not account for correlated threads and wrapper variants; never pool the two samples as a corpus accuracy estimate.",
+    "Original Luna baseline is unchanged. This pass does not tune or validate a rejection policy."
+  ],
+  "provisional_reconciled_counts": {
+    "normal": 2366,
+    "pathological": 981,
+    "ambiguous": 117
+  },
+  "wrapper_inconsistencies": {
+    "families": 9,
+    "bodies": 18
+  },
+  "sol_labels_sha256": "f7fd2b270c078af10728cedd131aaae93be50c1bdc48b830354c8ac61dc18a74",
+  "reconciled_labels_sha256": "7438aba8994cf0ddacb471adbb76506c578f20675c2fed4ad8e8e5e43ef3856c"
+}
