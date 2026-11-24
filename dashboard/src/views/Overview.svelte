@@ -8,6 +8,7 @@
   import MonthCurve from "../components/MonthCurve.svelte";
   import Breakdown from "../components/Breakdown.svelte";
   import Missions from "../components/Missions.svelte";
+  import Drift from "../components/Drift.svelte";
 
   const params = $derived(router.route.params);
   const by = $derived(params.get("by") ?? "model");
@@ -191,13 +192,35 @@
 
     <section class="section">
       <header>
-        <h2>By mission</h2>
+        <h2>As one sender keeps writing</h2>
+      </header>
+      {#if ov.drift}
+      {@const d = ov.drift}
+      {@const caught = ov.screening.blocked_low}
+      <p class="note lede">
+        Order each sender thread's handoffs by when they were sent and cut the thread into fifths. Across the {n(d.threads.length)} sender threads with at least {n(d.min_handoffs)} handoffs ({n(d.qualifying_handoffs)} handoffs), the share the hook blocks rises from
+        <strong class="num">{pct(d.pooled[0]?.hook_blocked?.p)}</strong> in the first fifth to <strong class="num">{pct(d.pooled.at(-1)?.hook_blocked?.p)}</strong> in the last.
+        In <strong class="num">{n(d.rising)}</strong> of the {n(d.threads.length)} threads the second half is at least 10 points higher than the first, and in {n(d.falling)} it is that much lower. Reviewed handoffs from {sampleName} show the same direction in their presentation scores, on small counts.
+      </p>
+      <p class="note limits">
+        What this can and cannot show. Position within one sender's thread is the unit that shows the writing drifting; a mission or a calendar day mixes threads at different stages and hides it.
+        The hook's block rate stands in for shorthand{#if caught}: it blocks {pct(caught.p)} of the handoffs reviewers score Costly or Broken on presentation, so it misses about {pct(1 - caught.p)} of them{/if}.
+        {n(d.without_sender)} handoffs name no sender thread{#if d.without_time} and {n(d.without_time)} have no time{/if}, so they are left out.
+        A later position means more handoffs sent, a longer session and more context, all at once: this shows that the writing drifts, not why.
+      </p>
+      <Drift drift={d} {sampleName} {listSample} sparse={meta.sparse} />
+      {/if}
+    </section>
+
+    <section class="section">
+      <header>
+        <h2>By mission and day</h2>
       </header>
       <p class="note lede">
         A mission is a connected group of threads. The {n(meta.corpus.inputs)} handoffs fall into {n(ov.missions.count)} missions, but the largest holds
         <strong class="num">{n(ov.missions.largest?.inputs ?? 0)}</strong> of them ({pct((ov.missions.largest?.inputs ?? 0) / meta.corpus.inputs)}), and
         <strong class="num">{n(ov.missions.busiest_days.reduce((s, d) => s + d.n, 0))}</strong> were sent on three days: {ov.missions.busiest_days.map((d) => dayName(d.day)).join(", ")}.
-        Within one mission the sender model hardly changes, yet the hook's block rate moves from day to day. Read the days of a mission together before reading anything into a model or a month. Each row links to its handoffs.
+        A mission and a calendar day each mix sender threads at different stages, so this slicing shows where handoffs came from, not how one sender's writing changes; for that, see the section above. Each row links to its handoffs.
       </p>
       <Missions
         missions={ov.missions.top}

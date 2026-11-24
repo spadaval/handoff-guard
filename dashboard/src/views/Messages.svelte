@@ -106,6 +106,7 @@
     { name: "content", label: "Content score", order: ["1", "2", "3", "4", "null"], names: scoreNames, hidden: ["none"] },
     { name: "intent", label: "Intent score", order: ["1", "2", "3", "4", "null"], names: scoreNames, hidden: ["none"] },
     { name: "clear", label: "Clear version", order: ["yes", "no"], names: { yes: "Reviewer wrote one", no: "None" } },
+    { name: "part", label: "Part of the sender's thread", order: ["1", "2", "3", "4", "5"], names: { 1: "First fifth", 2: "Second fifth", 3: "Third fifth", 4: "Fourth fifth", 5: "Last fifth" } },
     { name: "mission", label: "Mission", limit: 5, names: missionNames },
     { name: "day", label: "Day", limit: 5, names: dayNames },
     { name: "model", label: "Sender model", limit: 6 },
@@ -127,9 +128,9 @@
   const activeChips = $derived(
     [...new Set([...params.keys()])]
       .filter((k) => !["sort", "page", "basis", "q", "page_size"].includes(k))
-      .flatMap((k) => values(k).map((v) => ({ name: k, value: v, label: groups.find((g) => g.name === k)?.names?.[v] ?? v, group: groups.find((g) => g.name === k)?.label ?? chipNames[k] ?? k }))),
+      .flatMap((k) => values(k).map((v) => ({ name: k, value: v, label: k === "sender" ? (list?.sender_titles?.[v] ?? v) : (groups.find((g) => g.name === k)?.names?.[v] ?? v), group: groups.find((g) => g.name === k)?.label ?? chipNames[k] ?? k }))),
   );
-  const chipNames: Record<string, string> = { flag: "Hook check fired", agree: "Two reviews scored", pair: "Reviewed by both" };
+  const chipNames: Record<string, string> = { sender: "Sender thread", flag: "Hook check fired", agree: "Two reviews scored", pair: "Reviewed by both" };
   const page = $derived(list?.page ?? 0);
   const pages = $derived(list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1);
   const fromQuery = $derived.by(() => {

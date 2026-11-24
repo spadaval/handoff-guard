@@ -70,11 +70,24 @@ The dashboard asks two questions and gives each one definition.
   does not stop delivery, and a handoff that another check blocks still carries
   its warnings. Checks that never fire on any handoff are named once and left
   out of the tables.
+- **Drift within a sender's thread.** The handoffs each sender thread sent,
+  in the order it sent them (earliest record of each), cut into fifths. A
+  handoff's sender thread is its `sender_thread_id`, or its `thread_id` on
+  records from `t3_turn_items`, `codex_history`, `codex_rollout` and
+  `audit_cache`, which are recorded on the sender's own thread; a
+  `t3_messages` `thread_id` is the recipient's and is never used. Threads with
+  at least 30 handoffs are shown one by one and pooled. Hook figures are exact;
+  reviewer figures are the share of reviewed handoffs in the active sample
+  with Costly or Broken presentation, on small counts. Position counts
+  handoffs sent; a later position also means a longer session and more
+  context, so this shows that the writing drifts, not why. The hook's block
+  rate stands in for shorthand and misses part of it, and handoffs that name
+  no sender thread are left out; the page states both.
 - **Missions.** A mission is a connected group of threads, `component` in
-  `splits.record_json`. The Overview lists the largest missions with each day's
-  handoffs, hook block rate and sample estimate. Model, project, month,
-  mission and delivery tool change together in this corpus, so a difference
-  between groups is not evidence of a cause.
+  `splits.record_json`. The Overview lists the largest missions with each
+  day's handoffs. A mission and a day each mix sender threads at different
+  stages, so this slicing shows where handoffs came from, not how one sender's
+  writing changes.
 - **Months and days.** A handoff's month and day are those of its earliest
   recorded observation, in UTC. Months between the first and last with no
   handoffs are shown as empty.
@@ -143,7 +156,8 @@ names the parameter.
   `unsettled`, `none`), `cause` (`presentation`, `intent-content`), `hook`
   (`blocked`, `allowed`, `unassessed`), `flag` (`rule:status`), `issue`,
   `intent`, `content`, `presentation`, `clear`, `several` (`yes`, `no`),
-  `outside` (`yes`, `unknown`), `rater` (`reviewer@rubric`), `pair`
+  `outside` (`yes`, `unknown`), `sender` (a sender thread), `part` (`1` to
+  `5`, the fifth of a sender thread with at least 30 handoffs), `rater` (`reviewer@rubric`), `pair`
   (`raterA|raterB`), `agree`
   (`raterA|raterB|question|scoreA|scoreB`, with `needs` as the question for
   needs work), `mission`, `day`, `model` with `basis`, `project`, `month`,

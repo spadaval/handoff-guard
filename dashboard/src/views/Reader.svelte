@@ -152,6 +152,10 @@
         {#if detail.rubric_example}
           <div><dt>Rubric example</dt><dd>Quoted in the rubric as a worked example, so it is left out of <a href={href("/agreement")}>agreement figures</a></dd></div>
         {/if}
+        <div>
+          <dt>Sender thread</dt>
+          <dd>{#if detail.sender}<a href={href("/messages", { sender: detail.sender.key, sort: "oldest" })}>{detail.sender.title ?? "Untitled thread"}</a>{#if detail.sender.position} <span class="muted num">handoff {n(detail.sender.position.index)} of {n(detail.sender.position.of)}</span>{/if}{:else}<span class="muted">Not recorded</span>{/if}</dd>
+        </div>
         <div><dt>Size</dt><dd class="num">{n(detail.scalars)} characters, {n(detail.words)} words, {n(detail.lines)} lines</dd></div>
         {#if detail.thread_title}<div class="wide"><dt>Thread</dt><dd>{detail.thread_title}</dd></div>{/if}
       </dl>

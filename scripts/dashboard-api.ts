@@ -57,6 +57,16 @@ const EXCERPT = 1000;
 /** Points from fewer reviewed messages than this are shown but not joined into a line. */
 export const SPARSE = 5;
 const MISSIONS_SHOWN = 10;
+/** A sender thread needs this many handoffs before its drift is shown. */
+export const DRIFT_MIN = 30;
+/** Each qualifying sender thread is cut into this many equal parts by handoff order. */
+export const DRIFT_PARTS = 5;
+/**
+ * Sources whose `thread_id` is the thread the handoff was sent from. A
+ * t3_messages record belongs to the recipient's thread and names the sender
+ * in `sender_thread_id` instead.
+ */
+const SENDER_THREAD_SOURCES = new Set(["t3_turn_items", "codex_history", "codex_rollout", "audit_cache"]);
 
 export interface DashboardApiOptions {
   database: string;
@@ -103,6 +113,11 @@ interface Input {
   recorded_model: string | null;
   thread_model: string | null;
   thread_title: string | null;
+  /** The thread the handoff was sent from, when a record names it. */
+  sender_thread: string | null;
+  sender_title: string | null;
+  /** Position in the sender thread, counted in handoffs sent, and which part of the thread that is. */
+  position: { index: number; of: number; part: number } | null;
   hook: {
     blocked: boolean;
     decision_rule: string | null;
@@ -442,6 +457,9 @@ export function createDashboardApi(options: DashboardApiOptions) {
         recorded_model: null,
         thread_model: null,
         thread_title: null,
+        sender_thread: null,
+        sender_title: null,
+        position: null,
         hook: null,
       };
       inputs.push(input);
@@ -470,6 +488,9 @@ export function createDashboardApi(options: DashboardApiOptions) {
       // model selection describes the recipient, not the sender.
       input.thread_model = mostCommon(list.filter((o) => o.source !== "t3_messages").map((o) => o.saved_model_selection));
       input.thread_title = mostCommon(list.map((o) => o.thread_title));
+      const senderOf = (o: any) => o.sender_thread_id ?? (SENDER_THREAD_SOURCES.has(o.source) ? (o.thread_id ?? null) : null);
+      input.sender_thread = mostCommon(list.map(senderOf));
+      input.sender_title = mostCommon(list.filter((o) => SENDER_THREAD_SOURCES.has(o.source) && senderOf(o) === input.sender_thread).map((o) => o.thread_title));
       if (input.project === "unknown") input.project = mostCommon(list.map((o) => o.project)) ?? "unknown";
     }
     if (has("splits"))
@@ -477,6 +498,17 @@ export function createDashboardApi(options: DashboardApiOptions) {
         const input = byId.get(s.message_id);
         if (input) input.mission = decode<any>(s.record_json)?.component ?? null;
       }
+    // Order each sender thread's handoffs by their earliest record. Records
+    // within one minute keep message-ID order, which is arbitrary but stable.
+    {
+      const bySender = new Map<string, Input[]>();
+      for (const i of inputs)
+        if (i.sender_thread && i.first_seen) bySender.set(i.sender_thread, [...(bySender.get(i.sender_thread) ?? []), i]);
+      for (const list of bySender.values()) {
+        list.sort((a, b) => a.first_seen!.localeCompare(b.first_seen!) || a.id.localeCompare(b.id));
+        list.forEach((i, index) => (i.position = { index, of: list.length, part: Math.floor((index * DRIFT_PARTS) / list.length) }));
+      }
+    }
     const missions = new Map<string, { title: string | null; inputs: number }>();
     {
       const groups = new Map<string, Input[]>();
@@ -823,7 +855,77 @@ export function createDashboardApi(options: DashboardApiOptions) {
       },
       model_records: modelRecords,
       missions: missionsOf(ix, inSample),
+      drift: driftOf(ix, inSample),
       screening: screening(ix, members),
+    };
+  }
+
+  /**
+   * How the writing changes as one sender keeps writing: each sender thread
+   * with at least DRIFT_MIN handoffs, cut into DRIFT_PARTS equal parts by the
+   * order it sent them. Hook figures are exact over those handoffs; reviewer
+   * figures come from the active sample and are small.
+   */
+  function driftOf(ix: Index, inSample: Set<string>) {
+    const groups = new Map<string, Input[]>();
+    for (const i of ix.inputs) if (i.position) groups.set(i.sender_thread!, [...(groups.get(i.sender_thread!) ?? []), i]);
+    const qualifying = [...groups].filter(([, l]) => l.length >= DRIFT_MIN).sort((a, b) => b[1].length - a[1].length);
+    const segment = (list: Input[], part: number) => {
+      const s = list.filter((i) => i.position!.part === part);
+      const assessed = s.filter((i) => i.hook);
+      const reviewed = s.filter((i) => inSample.has(i.id)).map((i) => first(ix, i.id)).filter((r): r is ReviewRow => !!r && r.scores.presentation !== null);
+      return {
+        part,
+        handoffs: s.length,
+        hook_blocked: exact(assessed.filter((i) => i.hook!.blocked).length, assessed.length),
+        reviewed: reviewed.length,
+        presentation_low: wilson(reviewed.filter((r) => r.scores.presentation! <= 2).length, reviewed.length),
+        sparse: reviewed.length < SPARSE,
+      };
+    };
+    const half = (list: Input[], second: boolean) => {
+      const h = Math.floor(list.length / 2);
+      const s = (second ? list.slice(h) : list.slice(0, h)).filter((i) => i.hook);
+      return exact(s.filter((i) => i.hook!.blocked).length, s.length);
+    };
+    const threads = qualifying.map(([key, list]) => {
+      const ordered = [...list].sort((a, b) => a.position!.index - b.position!.index);
+      const firstHalf = half(ordered, false),
+        secondHalf = half(ordered, true);
+      const models = new Map<string, number>();
+      for (const i of list) {
+        const m = i.recorded_model ?? (i.thread_model ? i.thread_model + " (thread setting)" : "unknown");
+        models.set(m, (models.get(m) ?? 0) + 1);
+      }
+      return {
+        key,
+        title: mostCommon(list.map((i) => i.sender_title)),
+        mission: mostCommon(list.map((i) => i.mission)),
+        mission_title: ix.missions.get(mostCommon(list.map((i) => i.mission)) ?? "")?.title ?? null,
+        handoffs: list.length,
+        first_seen: ordered[0].first_seen,
+        last_seen: ordered.at(-1)!.first_seen,
+        models: [...models].sort((a, b) => b[1] - a[1]).map(([model, n]) => ({ model, n })),
+        first_half: firstHalf,
+        second_half: secondHalf,
+        change: firstHalf && secondHalf ? secondHalf.p - firstHalf.p : null,
+        parts: Array.from({ length: DRIFT_PARTS }, (_, p) => segment(list, p)),
+      };
+    });
+    const pooledInputs = qualifying.flatMap(([, l]) => l);
+    const withSender = ix.inputs.filter((i) => i.sender_thread).length;
+    return {
+      min_handoffs: DRIFT_MIN,
+      parts: DRIFT_PARTS,
+      with_sender_and_time: ix.inputs.filter((i) => i.position).length,
+      without_sender: ix.inputs.length - withSender,
+      without_time: withSender - ix.inputs.filter((i) => i.position).length,
+      threads_total: groups.size,
+      qualifying_handoffs: pooledInputs.length,
+      pooled: Array.from({ length: DRIFT_PARTS }, (_, p) => segment(pooledInputs, p)),
+      rising: threads.filter((t) => t.change !== null && t.change >= 0.1).length,
+      falling: threads.filter((t) => t.change !== null && t.change <= -0.1).length,
+      threads,
     };
   }
 
@@ -1054,6 +1156,12 @@ export function createDashboardApi(options: DashboardApiOptions) {
         ];
       }),
       mission: (i) => [i.mission ?? "none"],
+      sender: (i) => (i.sender_thread ? [i.sender_thread] : ["none"]),
+      // Part of a qualifying sender thread, 1 to DRIFT_PARTS.
+      part: (i) => {
+        if (!i.position || i.position.of < DRIFT_MIN) return [];
+        return [String(i.position.part + 1)];
+      },
       day: (i) => [i.day ?? "unknown"],
       model: (i) => [modelOf(i, basis)],
       project: (i) => [i.project],
@@ -1083,7 +1191,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       active.every(([name, values]) => name === skip || filters[name](i).some((v) => values.includes(v)));
     const rows = pool.filter((i) => matches(i));
     const facets = Object.fromEntries(
-      Object.keys(filters).filter((name) => name !== "agree").map((name) => {
+      Object.keys(filters).filter((name) => name !== "agree" && name !== "sender").map((name) => {
         const counts = new Map<string, number>();
         for (const i of pool) if (matches(i, name)) for (const v of new Set(filters[name](i))) counts.set(v, (counts.get(v) ?? 0) + 1);
         return [name, Object.fromEntries(counts)];
@@ -1123,6 +1231,9 @@ export function createDashboardApi(options: DashboardApiOptions) {
       ids: params.get("ids") === "1" ? rows.map((i) => i.id) : undefined,
       facets,
       mission_titles: missionTitles,
+      sender_titles: Object.fromEntries(
+        params.getAll("sender").flatMap((v) => v.split(",")).map((k) => [k, ix.inputs.find((i) => i.sender_thread === k)?.sender_title ?? null]),
+      ),
       messages: slice.map((i) => summary(ix, i, previews.get(i.id) ?? "", (snippets.get(i.id) ?? 0) > 81)),
     };
   }
@@ -1141,6 +1252,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       project: i.project,
       first_seen: i.first_seen,
       mission: i.mission,
+      position: i.position && { index: i.position.index + 1, of: i.position.of },
       model: i.recorded_model ?? i.thread_model,
       model_basis: modelBasis(i),
       hook: i.hook && { blocked: i.hook.blocked, decision_rule: i.hook.decision_rule, flags: i.hook.flags },
@@ -1262,6 +1374,13 @@ export function createDashboardApi(options: DashboardApiOptions) {
       project: input?.project ?? null,
       first_seen: input?.first_seen ?? null,
       thread_title: input?.thread_title ?? null,
+      sender: input?.sender_thread
+        ? {
+            key: input.sender_thread,
+            title: input.sender_title,
+            position: input.position && { index: input.position.index + 1, of: input.position.of },
+          }
+        : null,
       mission: input?.mission ? { key: input.mission, title: ix.missions.get(input.mission)?.title ?? null, inputs: ix.missions.get(input.mission)?.inputs ?? 0 } : null,
       model: {
         recorded: input?.recorded_model ?? null,

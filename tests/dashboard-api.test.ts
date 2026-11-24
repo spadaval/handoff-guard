@@ -512,3 +512,46 @@ test("an unreadable stored review is set aside without taking the API down", asy
   assert.equal(six.reviews.length, 1, "the readable review of the same message is still used");
   assert.equal(six.unreadable_reviews[0].run_id, "run-b");
 });
+
+test("drift orders each sender thread's handoffs and cuts it into fifths", async () => {
+  const db = new DatabaseSync(path);
+  const add = db.prepare("INSERT INTO messages VALUES(?,?,?,?,?,?,?)");
+  const obs = db.prepare("INSERT INTO observations VALUES(?,?,?,?,?)");
+  const hook = db.prepare("INSERT INTO mechanical_results VALUES(?,?,?)");
+  for (let k = 0; k < 40; k++) {
+    const m = id(100 + k);
+    const text = `Invented drift handoff number ${k}.`;
+    add.run(m, text, text.length, 5, JSON.stringify(["assignment"]), JSON.stringify(["Alpha"]), 1);
+    const at = new Date(Date.UTC(2026, 10, 10, 10, k)).toISOString();
+    // Half are recorded on the sender's own turn, half as deliveries naming the sender.
+    const record =
+      k % 2 === 0
+        ? { source: "t3_turn_items", kind: "assignment", thread_id: "thread-s", thread_title: "Invented sender thread", timestamp: at }
+        : { source: "t3_messages", kind: "agent_delivery", thread_id: "recipient-r", sender_thread_id: "thread-s", thread_title: "Invented recipient", timestamp: at };
+    obs.run(`drift-${k}`, m, 1000 + k, record.source, JSON.stringify(record));
+    hook.run("mech-new", m, JSON.stringify(report(k >= 24, { glued: k >= 24 ? "block" : "pass" })));
+  }
+  // A delivery that names only its recipient's thread has no sender thread.
+  add.run(id(200), "Invented orphan delivery.", 25, 3, JSON.stringify(["agent_delivery"]), JSON.stringify(["Alpha"]), 1);
+  obs.run("drift-orphan", id(200), 2000, "t3_messages", JSON.stringify({ source: "t3_messages", kind: "agent_delivery", thread_id: "recipient-r", timestamp: "2026-11-10T12:00:00Z" }));
+  db.close();
+  const d = (await get("/overview?sample=all")).body.drift;
+  assert.equal(d.with_sender_and_time, 40);
+  assert.equal(d.without_sender, 7, "the six fixture handoffs and the orphan delivery name no sender");
+  assert.equal(d.threads.length, 1);
+  const t = d.threads[0];
+  assert.equal(t.key, "thread-s");
+  assert.equal(t.title, "Invented sender thread", "the title comes from the sender's own records, not the recipient's");
+  assert.deepEqual(t.parts.map((p: any) => [p.handoffs, p.hook_blocked.k]), [[8, 0], [8, 0], [8, 0], [8, 8], [8, 8]]);
+  assert.deepEqual(d.pooled.map((p: any) => p.hook_blocked.p), [0, 0, 0, 1, 1]);
+  assert.equal(d.pooled[0].hook_blocked.low, undefined, "a share over every handoff in the corpus has no interval");
+  assert.deepEqual([t.first_half.p, t.second_half.p], [0, 0.8]);
+  assert.deepEqual([d.rising, d.falling], [1, 0]);
+  const last = (await get("/messages?sender=thread-s&part=5&sort=oldest&page_size=50")).body;
+  assert.equal(last.total, 8);
+  assert.equal(last.messages[0].message_id, id(132));
+  assert.equal(last.sender_titles["thread-s"], "Invented sender thread");
+  const one = (await get("/messages/" + id(132))).body;
+  assert.deepEqual(one.sender, { key: "thread-s", title: "Invented sender thread", position: { index: 33, of: 40 } });
+  assert.equal((await get("/messages/" + id(200))).body.sender, null);
+});
