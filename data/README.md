@@ -13,23 +13,23 @@ and `-shm` companions are SQLite internals, not separate datasets. Never delete
 those while connections are open. Back up a running database with SQLite's backup
 API, rather than copying or deleting its journal files.
 
-Old exports, independent review decisions, audit records and result reports
-were preserved in a compressed, checksum-bound historical archive **inside**
-SQLite. They are read-only history, not dependencies or another working format.
-The normalized message/context/review tables remain the active dataset.
-Screenshots, a superseded dashboard export and an obsolete compiled binary were
-discarded after verification. The binary's complete policy predictions were saved.
+Context text is stored once in `context_texts`. Evidence and historical-file
+references point to that text while keeping their individual provenance and
+visibility. Repetitive provenance is compressed; the tools reconstruct it when
+reading. Message bodies are unchanged.
+
+The obsolete working-file archive, abandoned prototypes, fixture traces,
+superseded diagnostics and duplicate evaluations have been removed. Canonical
+labels, contextual reviews, frozen splits and the policy baseline remain.
 
 ```sh
 python3 scripts/context_database.py validate
 python3 scripts/research.py runs
-python3 scripts/research.py archives
-python3 scripts/research.py archive docs/evaluation.md
 python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
 ```
 
-The archive command prints an original historical record to standard output.
-It does not write an export. Use the local dashboard for message browsing.
+Use `scripts/compact_database.py` to prune obsolete runs and reclaim freed pages.
+Stop the dashboard service before running maintenance on its live database.
 
 To capture a different corpus, use `scripts/export_corpus.py --database PATH`
 with a **new** database path. Extraction uses temporary files which are imported

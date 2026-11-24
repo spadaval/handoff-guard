@@ -53,7 +53,7 @@ Python is only used for offline corpus preparation and the integration test
 harness. Integration tests use the actual installed `codex` executable, a
 loopback scripted Responses server, a fresh child session and a temporary
 `CODEX_HOME`. They make no remote model requests. They neither read nor modify
-the active Codex configuration. Test traces and summaries are stored in the ignored SQLite database.
+the active Codex configuration. Integration fixtures use temporary files and print their results without retaining traces.
 
 ## Install and activate separately
 
@@ -109,8 +109,8 @@ python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
 ```
 
 These commands use SQLite directly. They create no corpus export or experiment
-folder. The old loose records and reports are preserved in the database's
-checksum-bound historical archive. See [database operations](docs/context-database.md)
+folder. Repeated context text is shared. Obsolete working exports and redundant runs
+are discarded. See [database operations](docs/context-database.md)
 for capture, review and maintenance commands. For a different corpus, capture into
 a new database and freeze its connected-thread split before tuning.
 

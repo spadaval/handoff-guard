@@ -1,60 +1,12 @@
 """SQLite storage for message-derived research. Configuration stays in Git files."""
 import json
-import sqlite3
 import subprocess
-import zlib
 from pathlib import Path
 
 import context_database as corpus
 
 ROOT = corpus.ROOT
 DATABASE = ROOT / 'data/handoffs.sqlite3'
-
-
-def archive(db, path, category='historical research'):
-    path = Path(path).resolve()
-    data = path.read_bytes()
-    sha = corpus.digest(data)
-    old = db.execute('SELECT sha256 FROM archived_files WHERE path=?', (str(path),)).fetchone()
-    if old and old[0] != sha:
-        raise ValueError('Archived source changed: ' + str(path))
-    db.execute('INSERT OR IGNORE INTO archived_blobs VALUES(?,?,?)',
-               (sha, len(data), zlib.compress(data)))
-    db.execute('INSERT OR IGNORE INTO archived_files VALUES(?,?,?)', (str(path), sha, category))
-    return sha
-
-
-def archived_bytes(db, path):
-    row = db.execute('SELECT b.* FROM archived_files f JOIN archived_blobs b USING(sha256) WHERE f.path=?',
-                     (str(Path(path).resolve()),)).fetchone()
-    if row is None:
-        # Keep original absolute provenance while allowing a relocated checkout
-        # to address a unique archive by its repository-relative path.
-        requested = Path(path)
-        if requested.is_absolute() and requested.is_relative_to(ROOT):
-            requested = requested.relative_to(ROOT)
-        if not requested.is_absolute():
-            suffix = '/'+requested.as_posix()
-            matches = db.execute('SELECT b.* FROM archived_files f JOIN archived_blobs b USING(sha256) WHERE substr(f.path,-length(?))=?',
-                                 (suffix,suffix)).fetchall()
-            if len(matches)==1:
-                row = matches[0]
-    if row is None:
-        raise KeyError(str(path))
-    data = zlib.decompress(row['compressed'])
-    if len(data) != row['bytes'] or corpus.digest(data) != row['sha256']:
-        raise ValueError('Archive checksum mismatch: ' + str(path))
-    return data
-
-
-def validate_archives(db):
-    count = 0
-    for row in db.execute('SELECT * FROM archived_blobs'):
-        data = zlib.decompress(row['compressed'])
-        if len(data) != row['bytes'] or corpus.digest(data) != row['sha256']:
-            raise ValueError('Archive checksum mismatch: ' + row['sha256'])
-        count += 1
-    return count
 
 
 def create_run(db, run_id, kind, metadata):

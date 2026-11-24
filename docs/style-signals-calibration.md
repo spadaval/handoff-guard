@@ -38,9 +38,8 @@ Earlier runs can be inspected without recreating their working folders:
 ```sh
 python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
 python3 scripts/research.py records style-signals-v3 label
-python3 scripts/research.py archive docs/style-signals-calibration.md
 ```
 
-The archive command shows the original historical report. All measurements,
+All measurements,
 findings and reports, including aggregates, stay out of Git. This document
 defines the procedure rather than carrying results.

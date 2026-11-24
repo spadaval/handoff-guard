@@ -5,13 +5,11 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 import context_database as corpus
 import research_store as store
 import research
-import consolidate_data as consolidation
 import calibrate_style_signals as calibration
 
 
@@ -29,46 +27,6 @@ class ResearchStoreTest(unittest.TestCase):
         self.db.execute('INSERT INTO splits VALUES(?,?)',(mid,corpus.js({'message_id':mid,'split':'tuning','component':mid})))
         self.db.commit()
         return mid
-
-    def test_archive_survives_removal_and_deduplicates_exact_bytes(self):
-        source = self.root/'original.jsonl'; duplicate = self.root/'duplicate.jsonl'
-        data = b'{"text":"Invented\\nmessage."}\n\x00'
-        source.write_bytes(data); duplicate.write_bytes(data)
-        with self.db:
-            store.archive(self.db,source); store.archive(self.db,duplicate)
-        source.unlink(); duplicate.unlink()
-        self.assertEqual(store.archived_bytes(self.db,source),data)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM archived_blobs').fetchone()[0],1)
-        self.assertEqual(store.validate_archives(self.db),1)
-        self.db.execute('UPDATE archived_blobs SET compressed=?',(b'broken',))
-        with self.assertRaises(Exception):
-            store.archived_bytes(self.db,source)
-
-    def test_cleanup_refuses_changed_files_then_leaves_only_sqlite(self):
-        self.body('Check an invented migration fixture.')
-        self.db.execute('INSERT INTO metadata VALUES(?,?)',('manifest',corpus.js({'counts':{'unique_plaintext_bodies':1,'plaintext_observations':0}})))
-        self.db.commit()
-        (self.root/'data').mkdir()
-        (self.root/'data/README.md').write_text('Synthetic instructions.')
-        (self.root/'docs').mkdir()
-        for name in consolidation.RESULT_DOCS:
-            (self.root/'docs'/name).write_text('Synthetic prior analysis.')
-        directory = self.root/'private'
-        source = directory/'labels.json'
-        source.write_text('{"label":"normal"}')
-        with patch.object(consolidation,'ROOT',self.root):
-            consolidation.consolidate(self.db,directory)
-            consolidation.consolidate(self.db,directory)  # Identical reruns do not duplicate.
-            saved = source.read_bytes()
-            source.write_text('changed after import')
-            with self.assertRaises(ValueError):
-                consolidation.cleanup(self.db,directory)
-            self.assertTrue(source.exists())
-            source.write_bytes(saved)
-            consolidation.cleanup(self.db,directory)
-            self.assertEqual([p.name for p in directory.iterdir()],['test.sqlite3'])
-            self.assertEqual(store.archived_bytes(self.db,source),saved)
-            self.assertEqual(self.db.execute('SELECT count(*) FROM messages').fetchone()[0],1)
 
     def test_run_and_record_retries_are_immutable_and_transactional(self):
         mid = self.body('Check the invented fixture.')
@@ -120,7 +78,7 @@ class ResearchStoreTest(unittest.TestCase):
         metadata = calibration.prepare(self.db,'trial',binary,config,'baseline')
         self.assertEqual(metadata['policy_differences'],0)
         self.assertEqual({r['message_id'] for r in store.records(self.db,'trial','sample')},{a,b})
-        self.assertEqual(len(store.records(self.db,'trial','inspection')),2)
+        self.assertEqual(store.records(self.db,'trial','inspection'),[])
         with self.assertRaises(ValueError):
             calibration.prepare(self.db,'trial',binary,config,'baseline')
         with self.assertRaises(ValueError):

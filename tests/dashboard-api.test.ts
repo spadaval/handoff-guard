@@ -1,6 +1,7 @@
 import {test,beforeEach,afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
+import {deflateSync} from 'node:zlib';
 import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -77,4 +78,14 @@ test('HTTP API rejects writes, invalid pagination and unknown IDs without changi
  assert.equal((await fetch(base+'/messages/not-an-id')).status,404);assert.equal((await fetch(base+'/messages/'+id(999))).status,404);
  assert.equal((await get('?view=all&query='+encodeURIComponent("'; DROP TABLE messages; --"))).total,0);
  assert.equal(createHash('sha256').update(readFileSync(path)).digest('hex'),before);
+});
+
+test('compressed provenance is reconstructed by the read-only connection',async()=>{
+ const db=new DatabaseSync(path);
+ db.exec('ALTER TABLE evidence RENAME TO evidence_records');
+ db.prepare('UPDATE evidence_records SET provenance=? WHERE evidence_id=?').run(deflateSync(Buffer.from(JSON.stringify({line:7,visibility:'recorded'}))),'e');
+ db.exec('CREATE VIEW evidence AS SELECT evidence_id,kind,text,unpack_text(provenance) AS provenance,visibility FROM evidence_records');db.close();
+ const response=await fetch(base+'/messages/'+id(1));assert.equal(response.status,200);
+ const detail=await response.json() as any;
+ assert.deepEqual(detail.contexts[0].evidence[0].provenance,{line:7,visibility:'recorded'});
 });

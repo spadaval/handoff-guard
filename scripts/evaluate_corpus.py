@@ -113,7 +113,7 @@ def evaluate(db, binary, label_source):
         mid = row['message_id']
         details.append({**by_id[mid], 'split': split[mid], 'kinds': row['kinds'],
                         'style_label': labels.get(mid, {}).get('style_label', 'unassessed')})
-    run_id = 'evaluation-' + corpus.digest(corpus.js(report)+corpus.checksum(Path(__file__)))[:24]
+    run_id = 'evaluation-' + corpus.digest(corpus.js(report))[:24]
     with db:
         store.create_run(db,run_id,'corpus-evaluation',report)
         for detail in details:

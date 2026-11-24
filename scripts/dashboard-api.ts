@@ -1,5 +1,6 @@
 /** Read-only dashboard API, mounted in the existing Artifact Hub server. */
 import { DatabaseSync } from 'node:sqlite';
+import { inflateSync } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const prefix = '/api/handoff-review';
@@ -13,7 +14,7 @@ const mechanics = `SELECT result_json FROM mechanical_results JOIN mechanical_ru
 export function createDashboardApi(databasePath: string) {
  let db: DatabaseSync | undefined;
  function database() {
-  if (!db) { db = new DatabaseSync(databasePath, { readOnly: true }); db.exec('PRAGMA query_only=ON'); }
+  if (!db) { db = new DatabaseSync(databasePath, { readOnly: true }); db.function('unpack_text',(value:any)=>value instanceof Uint8Array ? inflateSync(value).toString('utf8') : value); db.exec('PRAGMA query_only=ON'); }
   return db;
  }
  function list(params: URLSearchParams) {

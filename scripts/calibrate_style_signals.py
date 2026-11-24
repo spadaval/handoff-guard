@@ -67,8 +67,6 @@ def prepare(db, run_id, binary, config_path, baseline_run):
                 'corpus_bodies':len(rows),'sample_count':len(sampled),'policy_differences':differences}
     with db:
         store.create_run(db,run_id,'style-calibration',metadata)
-        for result in reports:
-            store.put(db,run_id,'inspection',result['message_id'],result,result['message_id'])
         for row in sampled:
             store.put(db,run_id,'sample',row['message_id'],row,row['message_id'])
     return metadata

@@ -88,15 +88,6 @@ hooks = true
         events = [json.loads(line) for line in audit.read_text().splitlines()] if audit.exists() else []
         target = [e for e in events if any(e['tool_name'].endswith(t) for t in ['spawn_agent','send_message','followup_task'])]
         summary = {'scenario':scenario,'codex_exit':result.returncode,'requests':len(requests),'intercepted':[{'tool':e['tool_name'],'characters':len(e['tool_input'].get('message',''))} for e in target], 'stdout':result.stdout,'stderr':result.stderr}
-        # Keep integration traces local; no corpus text is involved.
-        import context_database as corpus
-        import research_store as store
-        db = corpus.connect(store.DATABASE)
-        run_id = 'hook-integration-'+scenario+'-'+corpus.now()
-        with db:
-            store.create_run(db,run_id,'hook-integration',{'scenario':scenario,'binary_sha256':corpus.checksum(binary)})
-            store.put(db,run_id,'trace','session',{'summary':summary,'events':events,'requests':requests})
-        db.close()
         outputs = [x for req in requests for x in req.get('input', []) if x['type'].endswith('call_output')]
         output_text = json.dumps(outputs)
         assert result.returncode == 0, summary
@@ -119,10 +110,6 @@ hooks = true
         concise = {k:v for k,v in summary.items() if k not in ['stdout','stderr']}
         concise['assertions_passed'] = True
         concise['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
-        db = corpus.connect(store.DATABASE)
-        with db:
-            store.put(db,run_id,'report','summary',concise)
-        db.close()
         print(json.dumps(concise,indent=2))
         return summary
 

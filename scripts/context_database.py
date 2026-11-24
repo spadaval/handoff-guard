@@ -59,6 +59,8 @@ def ro(p):
     d = sqlite3.connect('file:' + quote(str(Path(p).resolve())) + '?mode=ro', uri=True)
     d.row_factory = sqlite3.Row
     d.execute('PRAGMA query_only=ON')
+    from database_storage import configure
+    configure(d)
     return d
 
 
@@ -71,6 +73,10 @@ def connect(p):
     d.row_factory = sqlite3.Row
     d.execute('PRAGMA foreign_keys=ON')
     version = d.execute('PRAGMA user_version').fetchone()[0]
+    from database_storage import configure, upgrade
+    configure(d)
+    if version == 2:
+        return d
     if version not in (0,1):
         raise ValueError('Unsupported database schema version')
     d.execute('PRAGMA user_version=1')
@@ -97,13 +103,12 @@ def connect(p):
     CREATE INDEX IF NOT EXISTS history_message ON historical_reviews(message_id);
     CREATE INDEX IF NOT EXISTS review_context ON reviews(context_id);
     CREATE INDEX IF NOT EXISTS ref_context ON context_references(context_id);
-    CREATE TABLE IF NOT EXISTS archived_blobs(sha256 TEXT PRIMARY KEY, bytes INTEGER NOT NULL, compressed BLOB NOT NULL);
-    CREATE TABLE IF NOT EXISTS archived_files(path TEXT PRIMARY KEY, sha256 TEXT NOT NULL REFERENCES archived_blobs, category TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS analysis_runs(run_id TEXT PRIMARY KEY, kind TEXT NOT NULL, created_at TEXT NOT NULL, metadata_json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS analysis_records(run_id TEXT NOT NULL REFERENCES analysis_runs, kind TEXT NOT NULL, record_key TEXT NOT NULL, message_id TEXT REFERENCES messages, record_json TEXT NOT NULL, PRIMARY KEY(run_id,kind,record_key));
     CREATE INDEX IF NOT EXISTS analysis_message ON analysis_records(message_id);
     CREATE VIEW IF NOT EXISTS input_contexts AS SELECT c.*,o.source,o.record_json AS observation_json FROM contexts c JOIN messages m USING(message_id) JOIN observations o USING(observation_id) WHERE m.is_input=1;
     ''')
+    upgrade(d)
     return d
 
 
@@ -114,8 +119,6 @@ def bind_file(db, p, purpose):
     if old and old[0] != value:
         raise ValueError('Source changed; use a fresh DB to preserve checksum binding: ' + str(p))
     db.execute('INSERT OR IGNORE INTO source_files VALUES(?,?,?,?)', (str(p), value, p.stat().st_size, purpose))
-    from research_store import archive
-    archive(db,p,purpose)
     return value
 
 
@@ -631,23 +634,15 @@ def validate(db):
             raise ValueError('Stored observation binding mismatch')
     if db.execute("SELECT count(*) FROM contexts c JOIN observations o USING(observation_id) WHERE c.message_id!=o.message_id OR c.context_id!='ctx-'||o.observation_id").fetchone()[0]:
         raise ValueError('Context/observation binding mismatch')
-    for r in db.execute('SELECT * FROM source_files'):
-        archived = db.execute('SELECT sha256 FROM archived_files WHERE path=?', (r['path'],)).fetchone()
-        if archived:
-            from research_store import archived_bytes
-            value = digest(archived_bytes(db,r['path']))
-        else:
-            value = checksum(r['path'])
-        if value != r['sha256']:
-            raise ValueError('Bound input changed: ' + r['path'])
+    for row in db.execute('SELECT sha256,text FROM context_texts'):
+        if bytes.fromhex(digest(row['text'])) != row['sha256']:
+            raise ValueError('Shared context text hash mismatch')
     manifest = json.loads(db.execute("SELECT value FROM metadata WHERE key='manifest'").fetchone()[0])
     s = summary(db)
     if s['messages'] != manifest['counts']['unique_plaintext_bodies'] or s['observations'] != manifest['counts']['plaintext_observations']:
         raise ValueError('Manifest count mismatch')
     if s['context_status'].get('pending',0):
         raise ValueError('Recovery incomplete; rerun collect')
-    from research_store import validate_archives
-    validate_archives(db)
     return s
 
 

@@ -6,7 +6,8 @@ files. Reviewers and agents can inspect these controls without opening SQLite.
 
 The ignored `data/handoffs.sqlite3` contains messages and every derived
 record: contexts, labels, sample assignments, diagnostics, scores and reports.
-Earlier loose working data and reports were preserved in its historical archive.
+Repeated context text is shared, and obsolete exports, prototypes and redundant
+runs are discarded. The working-file archive has been removed.
 The dashboard reads this database directly. Automatic WAL/SHM files are managed
 by SQLite; they are not separate datasets.
 

@@ -67,8 +67,6 @@ def main():
     sub = p.add_subparsers(dest='command',required=True)
     sub.add_parser('runs')
     a = sub.add_parser('records'); a.add_argument('run'); a.add_argument('kind'); a.add_argument('--key')
-    a = sub.add_parser('archive'); a.add_argument('path')
-    sub.add_parser('archives')
     a = sub.add_parser('message'); a.add_argument('message_id'); a.add_argument('--context')
     a = sub.add_parser('sample'); a.add_argument('run'); a.add_argument('--count',type=int,default=30); a.add_argument('--reviewer',required=True); a.add_argument('--config',type=Path,default=corpus.ROOT/'config/review.json')
     a = sub.add_parser('record'); a.add_argument('run')
@@ -85,11 +83,6 @@ def main():
                 if row is None: raise ValueError('Unknown record')
                 result = json.loads(row[0])
             else: result = store.records(db,args.run,args.kind)
-        elif args.command=='archives':
-            result = [dict(r) for r in db.execute('SELECT f.path,f.category,b.sha256,b.bytes FROM archived_files f JOIN archived_blobs b USING(sha256) ORDER BY f.path')]
-        elif args.command=='archive':
-            sys.stdout.buffer.write(store.archived_bytes(db,args.path))
-            return
         elif args.command=='sample':
             result = sample(db,args.run,args.count,args.config,args.reviewer)
         elif args.command=='record':

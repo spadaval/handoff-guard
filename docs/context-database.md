@@ -23,7 +23,7 @@ python3 scripts/research.py runs
 
 `collect` resumes context recovery in an existing database. It does not require
 old JSONL files and does not automatically export the database. Original body
-hashes, observation/context bindings, archived-source checksums, manifest counts
+hashes, observation/context bindings, shared-text checksums, manifest counts
 and foreign keys are validated. Integrity failures stop the operation.
 
 `evaluate` stores per-body predictions and aggregate results in SQLite and
@@ -66,13 +66,19 @@ path, with explicit recovery gaps.
   earlier context-bound model assessments without converting their scales.
 - `mechanical_runs` and `mechanical_results` hold compiled Rust diagnostics.
 - `analysis_runs` and `analysis_records` hold calibration samples, rule labels,
-  policy baselines, newer manual reviews, integration traces and result summaries.
+  policy baselines, newer manual reviews and result summaries.
   Records are keyed by run, kind and key. Message records have a foreign key to
   their exact body. Repeating an identical write is safe; changing it is refused.
-- `archived_files` maps original historical paths to deduplicated compressed
-  `archived_blobs`. Both exact byte count and SHA-256 are verified. `source_files`
-  binds original import provenance to those internal bytes, not to external files.
-  Original ciphertext exports remain excluded from plaintext classification.
+- `context_texts` stores each distinct context text once, keyed by a binary hash
+  and a compact integer ID. `evidence_records` and `reference_records` retain
+  individual provenance/visibility and reference shared text. Their repetitive
+  metadata is compressed. The `evidence` and `context_references` views expose
+  the original logical records to Python and the dashboard. Open Python
+  connections through `context_database.connect` or `ro` so the decompressor is
+  registered. The dashboard API registers the equivalent reader itself.
+- `source_files` keeps original import names, byte counts and checksums as
+  provenance. Imported message/context records are validated directly; external
+  exports and their archived copies are not needed.
 
 Recovery records missing source anchors, timestamps and recipient access rather
 than guessing them. Historical Git reads disable lazy fetch and transports;
@@ -101,25 +107,31 @@ Each review is immutable. New manual runs are inspectable through `research.py`;
 the dashboard's existing contextual pilot remains unchanged.
 
 Signal-specific calibration uses [its own commands](style-signals-calibration.md).
-The old file-oriented review algorithms remain in `scripts/legacy/` for historical
-reproduction and synthetic regression checks. Their CLIs are retired.
+The abandoned file-oriented review CLIs and working-file archive have been removed.
 
-## Historical records and maintenance
+## Maintenance
 
 ```sh
-python3 scripts/research.py archives
-python3 scripts/research.py archive docs/context-pilot-v2.md
-python3 scripts/research.py records style-signals-v3 label
+python3 scripts/compact_database.py
 ```
 
-Archive paths are original provenance. They do not imply a required file on disk.
-The one-time consolidation command requires an explicit `--legacy-directory`
-on its first import. It imports old working files transactionally, validates
-all archives and existing table counts, and only then permits `--cleanup`.
-Cleanup verifies every candidate's hash before removing any files. Screenshots,
-the obsolete dashboard snapshot and the old executable are disposable; independent
-decisions and reports are retained. Do not use the historical archive as a second
-active results store.
+Stop Artifact Hub with its existing management CLI before maintaining the live
+database, then start it again afterwards. Do not create another server.
+
+Opening a v1 database migrates context text into shared storage transactionally.
+The migration compares complete logical-record fingerprints before committing.
+It preserves evidence IDs, references, text, provenance, visibility and links.
+
+Compaction removes the obsolete working-file archive, abandoned unlabeled
+calibration prototypes, fixture integration traces, superseded mechanical
+results and older complete evaluations of the same label source. It keeps the
+newest available diagnostic per message, canonical reviews/labels, frozen splits
+and the old-policy baseline. All essential table fingerprints and the retained
+diagnostics are checked before committing. SQLite VACUUM then reclaims pages.
+
+New calibration runs retain frozen sample measurements rather than another full
+copy of every inspection result. Integration fixtures do not append traces to
+the research database. Raw data and aggregate results remain out of Git.
 
 `context_database.py export --snapshot PATH` remains an explicit optional legacy
 export for outside tools. It is not part of the dashboard or normal workflow.
