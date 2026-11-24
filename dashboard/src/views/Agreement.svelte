@@ -60,6 +60,12 @@
   {:else if !data}
     <div class="skeleton" style="height: 360px; margin-top: 32px"></div>
   {:else}
+    {#if data.repeat_reviews_unused.length}
+      <p class="examples small">
+        Each handoff counts once per comparison, with each rater's earliest review of it.
+        {data.repeat_reviews_unused.map((r) => `${r.rater.replace("@", " under ")} has ${n(r.n)} repeat ${r.n === 1 ? "review" : "reviews"}`).join("; ")} of handoffs it had already reviewed, not used here.
+      </p>
+    {/if}
     {#if data.rubric_examples}
       <p class="examples small">
         {n(data.rubric_examples)} handoffs are left out of every figure on this page{#if data.rubric_examples_with_several_reviews}, {n(data.rubric_examples_with_several_reviews)} of them with more than one review{/if}. The rubric quotes them as worked examples of each severity, so a reviewer who meets one has been shown its presentation score; they are not a fair test of agreement. They stay in the prevalence figures.

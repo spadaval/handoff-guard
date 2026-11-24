@@ -66,6 +66,9 @@
     {#if meta.several_reviews}
       <p class="note-strong small">{n(meta.several_reviews)} handoffs have more than one review ({n(meta.reviews_total)} reviews in all). Figures use one reference review of each; the reader lists every review and the <a href="#/agreement">Agreement</a> view compares them.</p>
     {/if}
+    {#if meta.unreadable_reviews}
+      <p class="note-strong small">{n(meta.unreadable_reviews)} stored {meta.unreadable_reviews === 1 ? "review" : "reviews"} could not be read and {meta.unreadable_reviews === 1 ? "is" : "are"} left out of every figure. The reader names each one.</p>
+    {/if}
     <SampleControls />
   </header>
 
@@ -147,10 +150,10 @@
         <h2>Which question holds the lowest score</h2>
         {#if ov.cause.needs_work}
           <p class="finding">
-            {#if ov.cause.by_dimension.presentation === ov.cause.needs_work && !ov.cause.outside_hook}
+            {#if ov.cause.by_dimension.presentation === ov.cause.needs_work && !ov.cause.intent_content_only}
               Presentation holds the lowest score in all {n(ov.cause.needs_work)} handoffs that need work. Intent or content alone never does.
             {:else}
-              Presentation holds the lowest score in {n(ov.cause.by_dimension.presentation)} of the {n(ov.cause.needs_work)} handoffs that need work; intent or content alone in {n(ov.cause.outside_hook)}.
+              Presentation holds the lowest score in {n(ov.cause.by_dimension.presentation)} of the {n(ov.cause.needs_work)} handoffs that need work; intent or content alone in {n(ov.cause.intent_content_only)}.
             {/if}
           </p>
           <ul class="causes num">

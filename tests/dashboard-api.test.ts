@@ -234,7 +234,7 @@ test("figures use the reference review and score() for every score", async () =>
   );
   assert.equal(body.cause.needs_work, 3);
   assert.deepEqual(body.cause.by_dimension, { intent: 0, content: 1, presentation: 2 });
-  assert.equal(body.cause.outside_hook, 1);
+  assert.equal(body.cause.intent_content_only, 1);
   assert.ok(body.issues.find((i: any) => i.kind === "retired_kind" && i.retired && i.k === 1), "kinds from older rubrics stay visible");
 });
 
@@ -246,13 +246,13 @@ test("the hook is judged against the presentation score", async () => {
   assert.equal(s.cells.allowed.null, 1);
   assert.deepEqual(s.blocked_low, wilson(1, 2));
   assert.deepEqual(s.allowed_high, wilson(2, 2));
-  assert.deepEqual(s.outside, { k: 1, needs_work: 3, reviewed: 5 });
+  assert.deepEqual(s.outside, { k: 1, presentation_unknown: 0, needs_work: 3, reviewed: 5 });
   // Checks are taken from the reports. One that never fires is listed apart.
   assert.deepEqual(s.checks.map((c: any) => c.rule).sort(), ["glued", "spacing"]);
   assert.deepEqual(s.silent, ["silent"]);
   const spacing = s.checks.find((c: any) => c.rule === "spacing");
   assert.deepEqual(spacing.sample.warn, { low: 2, high: 0 });
-  assert.deepEqual(spacing.warned_but_blocked, { corpus: 1, sample: 1 });
+  assert.deepEqual(spacing.warned_but_blocked, { corpus: 1, sample_low: 1 });
 });
 
 test("agreement cross-tables pair every two reviews of a message", async () => {
@@ -439,4 +439,76 @@ test("a hook binary that exits without reading falls back to the stored report",
   assert.equal(m.hook.live, null);
   assert.ok(m.hook.live_error);
   assert.ok(m.hook.stored);
+});
+
+test("outside what the hook can see uses one rule for the count and its link", async () => {
+  const db = new DatabaseSync(path);
+  // Message 4: needs work for intent (1), with presentation Costly (2). Presentation
+  // is not the lowest score, but it is within the hook's view, so it is not outside.
+  db.prepare("INSERT INTO analysis_records VALUES(?,?,?,?,?)").run("run-a", "review", id(4), id(4), JSON.stringify(review(4, { intent: 1, presentation: 2 })));
+  // Message 6: a newer review that needs work for intent while presentation is unknown.
+  const six = { ...v9(6, {}), intent: { statement: "s", reason: "r", issues: [{ kind: "buried_ask", severity: "broken", quote: "", effect: "e", repair: "r" }] }, presentation: { unknown: true, reason: "r", issues: [] } };
+  db.prepare("INSERT INTO analysis_records VALUES(?,?,?,?,?)").run("run-c", "review", id(6), id(6), JSON.stringify(six));
+  db.close();
+  const s = (await get("/overview?sample=all")).body.screening;
+  assert.equal(s.outside.k, 1);
+  assert.equal(s.outside.presentation_unknown, 1);
+  const linked = (await get("/messages?sample=reviewed&outside=yes")).body;
+  assert.equal(linked.total, s.outside.k, "the link opens exactly the handoffs the count counts");
+  assert.deepEqual(linked.messages.map((m: any) => m.message_id), [id(5)]);
+  assert.deepEqual((await get("/messages?sample=reviewed&outside=unknown")).body.messages.map((m: any) => m.message_id), [id(6)]);
+  // The overview's "intent or content alone" is a different question: where the lowest score lies.
+  assert.ok((await get("/messages?cause=intent-content")).body.messages.some((m: any) => m.message_id === id(4)));
+});
+
+test("agreement counts each handoff once per comparison, using each rater's earliest review", async () => {
+  const db = new DatabaseSync(path);
+  db.prepare("INSERT INTO analysis_runs VALUES(?,?,?,?)").run("run-a2", "manual-review", "2026-11-27T01:00:00Z", JSON.stringify({ reviewer: "fixture-reviewer", rubric_version: "handoff-v6" }));
+  // A repeat review of message 2 by the same reviewer under the same rubric, disagreeing with the first.
+  db.prepare("INSERT INTO analysis_records VALUES(?,?,?,?,?)").run("run-a2", "review", id(2), id(2), JSON.stringify(review(2, { presentation: 4 })));
+  db.close();
+  const { body } = await get("/agreement");
+  const key = "fixture-reviewer@handoff-v6|fixture-reviewer@handoff-v9";
+  const c = body.comparisons.find((x: any) => x.key === key);
+  assert.equal(c.messages, 1);
+  assert.equal(c.questions.presentation.table["2"]["1"], 1, "the earliest v6 review is used");
+  assert.equal(c.questions.presentation.table["4"]["1"], 0);
+  assert.equal((await get("/messages?pair=" + encodeURIComponent(key))).body.total, c.messages);
+  assert.deepEqual(body.repeat_reviews_unused, [{ rater: "fixture-reviewer@handoff-v6", n: 1 }]);
+  assert.equal(body.comparisons.some((x: any) => x.a.rater === x.b.rater), false, "a rater is never compared with itself");
+});
+
+test("the hook table caption counts every cell the table shows", async () => {
+  const s = (await get("/overview?sample=all")).body.screening;
+  const cells = Object.values(s.cells).flatMap((row: any) => Object.values(row) as number[]).reduce((a, b) => a + b, 0);
+  assert.equal(s.shown, cells);
+  assert.equal(s.shown, 5);
+  assert.equal(s.low + s.high, 4, "the rates use only cells with a known presentation score and a stored report");
+});
+
+test("the warning note counts only Costly or Broken presentation", async () => {
+  const db = new DatabaseSync(path);
+  // Message 3 (presentation 4 in its reference review) is now blocked by one check and warned by another.
+  db.prepare("UPDATE mechanical_results SET result_json=? WHERE run_id='mech-new' AND message_id=?").run(JSON.stringify(report(true, { glued: "block", spacing: "warn", silent: "pass" })), id(3));
+  db.close();
+  const spacing = (await get("/overview?sample=all")).body.screening.checks.find((c: any) => c.rule === "spacing");
+  assert.equal(spacing.warned_but_blocked.corpus, 2);
+  assert.equal(spacing.warned_but_blocked.sample_low, 1);
+  assert.equal(spacing.sample.warn.low, 2);
+});
+
+test("an unreadable stored review is set aside without taking the API down", async () => {
+  const db = new DatabaseSync(path);
+  db.prepare("INSERT INTO analysis_records VALUES(?,?,?,?,?)").run("run-a", "review", id(4), id(4), JSON.stringify({ ...review(4, {}), presentation: { reason: "r", issues: "not a list" } }));
+  db.prepare("INSERT INTO analysis_records VALUES(?,?,?,?,?)").run("run-b", "review", id(6), id(6), "{not json");
+  db.close();
+  for (const p of ["/meta", "/overview?sample=all", "/agreement", "/messages"]) assert.equal((await get(p)).status, 200, p);
+  assert.equal((await get("/meta")).body.unreadable_reviews, 2);
+  const four = (await get("/messages/" + id(4))).body;
+  assert.equal(four.reviews.length, 0);
+  assert.equal(four.unreadable_reviews.length, 1);
+  assert.match(four.unreadable_reviews[0].error, /issues is not a list/);
+  const six = (await get("/messages/" + id(6))).body;
+  assert.equal(six.reviews.length, 1, "the readable review of the same message is still used");
+  assert.equal(six.unreadable_reviews[0].run_id, "run-b");
 });

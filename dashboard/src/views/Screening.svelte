@@ -71,7 +71,9 @@
     <section class="section grid">
       <div>
         <h2>Hook result against presentation score</h2>
-        <p class="small muted sub">{n(s.low + s.high)} reviewed handoffs in {sampleName}. Hook results are the stored reports.</p>
+        <p class="small muted sub">
+          {n(s.shown)} reviewed handoffs in {sampleName}, all shown in the table. The two rates beside it use the {n(s.low + s.high)} with a known presentation score and a stored hook report{#if s.shown > s.low + s.high}; the other {n(s.shown - s.low - s.high)} sit in the No score or No stored report cells{/if}. Hook results are the stored reports.
+        </p>
         <table class="matrix num">
           <thead>
             <tr>
@@ -120,8 +122,12 @@
         <div class="outside">
           <h3 class="small">Outside what the hook can see</h3>
           <p class="small">
-            <strong class="num">{n(s.outside.k)}</strong> of the {n(s.outside.needs_work)} handoffs that need work do so for intent or content alone, with presentation scored Clean or Minor. No check in the hook could catch them.
-            {#if s.outside.k}<a href={href("/messages", { sample: listSample, cause: "intent-content" })}>Show them</a>{/if}
+            <strong class="num">{n(s.outside.k)}</strong> of the {n(s.outside.needs_work)} handoffs that need work have presentation scored Clean or Minor, so they need work for intent or content and no check in the hook could catch them.
+            {#if s.outside.k}<a href={href("/messages", { sample: listSample, outside: "yes" })}>Show them</a>{/if}
+            {#if s.outside.presentation_unknown}
+              Another <strong class="num">{n(s.outside.presentation_unknown)}</strong> need work but have no presentation score, so the hook question does not apply to them.
+              <a href={href("/messages", { sample: listSample, outside: "unknown" })}>Show them</a>
+            {/if}
           </p>
         </div>
         <p class="xs muted provenance">
@@ -158,7 +164,7 @@
                   <td class="r"><a href={href("/messages", { flag: `${c.rule}:${st}` })}>{n(c.corpus[st] ?? 0)}</a></td>
                   <td class="cib"><CIBar x={s.low ? { k: low, n: s.low, p: low / s.low } : null} tone="hook" /></td>
                   <td class="small">
-                    <a href={href("/messages", { sample: listSample, flag: `${c.rule}:${st}`, presentation: "1,2" })}>{n(low)}</a> of {n(s.low)}{#if st === "warn" && c.warned_but_blocked.sample}<span class="muted">; {n(c.warned_but_blocked.sample)} of these were already blocked by another check</span>{/if}
+                    <a href={href("/messages", { sample: listSample, flag: `${c.rule}:${st}`, presentation: "1,2" })}>{n(low)}</a> of {n(s.low)}{#if st === "warn" && c.warned_but_blocked.sample_low}<span class="muted">; {n(c.warned_but_blocked.sample_low)} of these were already blocked by another check</span>{/if}
                   </td>
                   <td class="r small"><a href={href("/messages", { sample: listSample, flag: `${c.rule}:${st}`, presentation: "3,4" })}>{n(c.sample[st].high)}</a> of {n(s.high)}</td>
                 </tr>

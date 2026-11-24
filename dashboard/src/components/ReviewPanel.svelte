@@ -50,6 +50,13 @@
     {/if}
   </header>
 
+  {#if detail.unreadable_reviews.length}
+    <p class="unreadable small">
+      {#each detail.unreadable_reviews as u}
+        This review could not be read: {u.reviewer ?? "unknown reviewer"}, run <span class="type">{u.run_id}</span> ({u.error}). It is left out of every figure.
+      {/each}
+    </p>
+  {/if}
   {#if !review || !r}
     {#if detail.picks.length}
       <p class="small quiet">
@@ -201,6 +208,12 @@
   .verdict {
     display: grid;
     gap: 2px;
+  }
+  .unreadable {
+    border: 1px solid var(--s1);
+    background: var(--s1-tint);
+    border-radius: 4px;
+    padding: 8px 10px;
   }
   .reviews {
     display: flex;

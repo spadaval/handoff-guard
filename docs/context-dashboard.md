@@ -30,6 +30,9 @@ The dashboard asks two questions and gives each one definition.
   Different raters under one rubric are listed first, then one rater under a
   changed rubric. Every cell opens its messages, and the reader shows a
   message's reviews side by side.
+  Each handoff counts once per comparison, with each rater's earliest review
+  of it; a rater's repeat reviews of the same handoff under the same rubric are
+  not used, and the view says how many there are.
   Messages listed in `rubric_example_messages` in `config/review.json` are
   left out of every agreement figure and cell: the rubric quotes them as
   worked examples, so a reviewer who meets one has been shown its severity.
@@ -38,8 +41,13 @@ The dashboard asks two questions and gives each one definition.
 - **Does the hook catch what it can see.** The hook measures spacing, size and
   repetition, so it is judged against the presentation score alone: the share
   blocked among Costly or Broken presentation, and the share allowed among
-  Clean or Minor. Handoffs that need work for intent or content alone are
-  counted separately as outside what the hook can see.
+  Clean or Minor, each computed on the handoffs with a known presentation
+  score and a stored hook report; the caption gives the table's full
+  population. A handoff is outside what the hook can see when it needs work
+  and its presentation is Minor or Clean; the count and its link (`outside=yes`)
+  use the same rule. Handoffs that need work with an unknown presentation score
+  are counted separately (`outside=unknown`). A check's warnings on handoffs
+  another check blocked are counted within the Costly-or-Broken band only.
 - **Samples.** Prevalence comes from the fair sample, the head of the shuffled
   sampling order returned by `probabilitySample()`. "All reviewed" adds the
   messages picked for long letter runs, for length and for the earlier pilot,
@@ -52,6 +60,10 @@ The dashboard asks two questions and gives each one definition.
   real uncertainty is wider. Counts over all handoffs are exact and show no
   interval. A group with fewer than 5 reviewed handoffs is shown greyed and is
   not joined into a line.
+- **Unreadable reviews.** A stored review that cannot be read (bad JSON, or
+  `issues` that is not a list of issues with a kind) is set aside for its
+  message only. The Overview says how many there are and the reader names
+  each one; every other review still counts.
 - **Hook.** Lists and aggregates use the reports of the newest run in
   `mechanical_results`; a handoff that run did not cover shows as having no
   stored report. The hook blocks or allows. A check can also warn; a warning
@@ -131,7 +143,8 @@ names the parameter.
   `unsettled`, `none`), `cause` (`presentation`, `intent-content`), `hook`
   (`blocked`, `allowed`, `unassessed`), `flag` (`rule:status`), `issue`,
   `intent`, `content`, `presentation`, `clear`, `several` (`yes`, `no`),
-  `rater` (`reviewer@rubric`), `pair` (`raterA|raterB`), `agree`
+  `outside` (`yes`, `unknown`), `rater` (`reviewer@rubric`), `pair`
+  (`raterA|raterB`), `agree`
   (`raterA|raterB|question|scoreA|scoreB`, with `needs` as the question for
   needs work), `mission`, `day`, `model` with `basis`, `project`, `month`,
   `size` and `kind`. Values in one filter are

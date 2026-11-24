@@ -97,6 +97,7 @@
     { name: "several", label: "Reviews", order: ["yes", "no"], names: { yes: "Reviewed more than once", no: "Reviewed once" }, hidden: [] },
     { name: "rater", label: "Reviewed by", names: raterNames },
     { name: "example", label: "Rubric example", order: ["yes", "no"], names: { yes: "Quoted in the rubric", no: "Not quoted" } },
+    { name: "outside", label: "Outside what the hook can see", order: ["yes", "unknown"], names: { yes: "Needs work, presentation Clean or Minor", unknown: "Needs work, presentation unknown" } },
     { name: "cause", label: "Needs work because of", order: ["presentation", "intent-content"], names: { presentation: "Presentation, alone or tied", "intent-content": "Intent or content only" } },
     { name: "hook", label: "Hook result", order: ["blocked", "allowed", "unassessed"], names: { blocked: "Blocks", allowed: "Allows", unassessed: "No stored report" } },
     { name: "flag", label: "Hook check fired", type: true, names: flagNames },

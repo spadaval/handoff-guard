@@ -131,6 +131,25 @@ interface ReviewRow {
   low: { score: number | null; questions: Dim[] };
   needs: boolean | null;
 }
+interface Unreadable {
+  run_id: string;
+  kind: string;
+  reviewer: string | null;
+  error: string;
+}
+/** Why a stored review cannot be read safely, or null when it can. */
+function reviewProblem(record: any): string | null {
+  if (!record || typeof record !== "object") return "the record is not an object";
+  for (const d of DIMENSIONS) {
+    const f = record[d];
+    if (f === undefined) continue;
+    if (!f || typeof f !== "object") return `${d} is not an object`;
+    if (f.issues !== undefined && !Array.isArray(f.issues)) return `${d}.issues is not a list`;
+    for (const issue of f.issues ?? [])
+      if (!issue || typeof issue !== "object" || typeof issue.kind !== "string") return `${d} has an issue without a kind`;
+  }
+  return null;
+}
 interface Run {
   run_id: string;
   reviewer: string | null;
@@ -154,6 +173,8 @@ interface Index {
   /** How each message was first picked, ignoring rerate draws. */
   firstPick: Map<string, string>;
   referenceReviewer: string | null;
+  /** Stored review or sample records that could not be read, by message. */
+  unreadable: Map<string, Unreadable[]>;
   /** Messages the rubric quotes as worked examples. Not a fair test of agreement. */
   rubricExamples: Set<string>;
   fair: Set<string> | null;
@@ -217,12 +238,40 @@ function keyOf(r: ReviewRow, q: Question) {
   const v = q === "lowest" ? r.low.score : r.scores[q];
   return v === null ? "null" : String(v);
 }
-/** Every pair of reviews of one message, each pair in a stable rater order. */
+/**
+ * One review per rater for a message: the earliest, since `list` is in run
+ * order. A rater's later reviews of the same message are repeats and are not
+ * used in agreement.
+ */
+function perRater(list: ReviewRow[]) {
+  const seen = new Map<string, ReviewRow>();
+  for (const r of list) if (!seen.has(r.rater)) seen.set(r.rater, r);
+  return [...seen.values()];
+}
+/**
+ * Every pair of raters that reviewed one message, each with its earliest
+ * review, in a stable rater order. Agreement figures and the filters that
+ * open their cells both use this, so a message counts once per comparison.
+ */
 function pairsOf(list: ReviewRow[]) {
+  const one = perRater(list);
   const out: [ReviewRow, ReviewRow][] = [];
-  for (let i = 0; i < list.length; i++)
-    for (let j = i + 1; j < list.length; j++) out.push(list[i].rater <= list[j].rater ? [list[i], list[j]] : [list[j], list[i]]);
+  for (let i = 0; i < one.length; i++)
+    for (let j = i + 1; j < one.length; j++) out.push(one[i].rater <= one[j].rater ? [one[i], one[j]] : [one[j], one[i]]);
   return out;
+}
+/**
+ * Outside what the hook can see: the handoff needs work while its
+ * presentation is Minor or Clean. The hook page's count and its link both use
+ * this.
+ */
+function outsideHook(r: ReviewRow | undefined) {
+  const p = r?.scores.presentation;
+  return needsWork(r) && typeof p === "number" && p >= 3;
+}
+/** Needs work, but the presentation score is unknown, so neither side of the hook question applies. */
+function presentationUnknown(r: ReviewRow | undefined) {
+  return needsWork(r) && r!.scores.presentation === null;
 }
 /** How the score of one question was reached, for the reader. */
 function scoring(f: Finding | undefined) {
@@ -467,6 +516,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
     const reviews = new Map<string, ReviewRow[]>();
     let fair: Set<string> | null = null;
     const firstPick = new Map<string, string>();
+    const unreadable = new Map<string, Unreadable[]>();
     if (has("analysis_runs")) {
       const meta = new Map<string, { reviewer: string | null; rubric_version: string | null; rubric_sha256: string | null; created_at: string }>();
       for (const r of d.all<any>(
@@ -485,10 +535,28 @@ export function createDashboardApi(options: DashboardApiOptions) {
       for (const r of d.all<any>(
         "SELECT r.run_id,r.kind,r.message_id,r.record_json FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind IN ('sample','review') ORDER BY a.created_at,r.run_id,r.record_key",
       )) {
-        const record = JSON.parse(r.record_json);
-        const id = r.message_id ?? record.message_id;
         const run = runs.find((x) => x.run_id === r.run_id)!;
         const m = meta.get(r.run_id)!;
+        let record: any;
+        let derived: { scores: ReviewRow["scores"]; low: ReviewRow["low"]; needs: ReviewRow["needs"] } | null = null;
+        // One unreadable record is set aside for its message; it must not take
+        // the whole index down.
+        try {
+          record = JSON.parse(r.record_json);
+          if (r.kind === "review") {
+            const problem = reviewProblem(record);
+            if (problem) throw new Error(problem);
+            derived = { scores: scoresOf(record), low: lowestOf(record), needs: needsWorkOf(record) };
+          }
+        } catch (e) {
+          if (r.message_id)
+            unreadable.set(r.message_id, [
+              ...(unreadable.get(r.message_id) ?? []),
+              { run_id: r.run_id, kind: r.kind, reviewer: m.reviewer, error: e instanceof Error ? e.message : String(e) },
+            ]);
+          continue;
+        }
+        const id = r.message_id ?? record.message_id;
         if (r.kind === "sample") {
           run.sampled++;
           // A rerate draw re-reviews a message already picked; it says nothing about how it was picked.
@@ -510,9 +578,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
               message_id: id,
               record,
               rater: `${m.reviewer ?? "unknown reviewer"}@${m.rubric_version ?? "unknown rubric"}`,
-              scores: scoresOf(record),
-              low: lowestOf(record),
-              needs: needsWorkOf(record),
+              ...derived!,
             },
           ]);
         }
@@ -540,7 +606,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       reference.set(id, own.find((r) => versionNumber(r.rubric_version) === newest)!);
     }
     const bodies = Number(Object.values(d.get("SELECT count(*) FROM messages")!)[0]);
-    index = { version, loaded_at: new Date().toISOString(), bodies, inputs, byId, runs, picks, reviews, reference, firstPick, referenceReviewer, rubricExamples, fair, hookRun, missions };
+    index = { version, loaded_at: new Date().toISOString(), bodies, inputs, byId, runs, picks, reviews, reference, firstPick, referenceReviewer, unreadable, rubricExamples, fair, hookRun, missions };
     return index;
   }
 
@@ -603,6 +669,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       reviews_total: [...ix.reviews.values()].reduce((s, r) => s + r.length, 0),
       several_reviews: reviewed.filter((id) => ix.reviews.get(id)!.length > 1).length,
       review_rubrics: [...new Set([...ix.reviews.values()].flat().map((r) => r.rubric_version ?? "unknown"))],
+      unreadable_reviews: [...ix.unreadable.values()].flat().filter((u) => u.kind === "review").length,
       reference_reviewer: ix.referenceReviewer,
       reference_rubrics: countBy([...ix.reference.values()].map((r) => r.rubric_version ?? "unknown")),
       raters: countBy([...ix.reviews.values()].flat().map((r) => r.rater)).map(({ value, n }) => {
@@ -679,7 +746,9 @@ export function createDashboardApi(options: DashboardApiOptions) {
       needs_work: needing.length,
       by_dimension: Object.fromEntries(DIMENSIONS.map((d) => [d, needing.filter((r) => lowest(r).includes(d)).length])),
       combinations: [...combos].sort((a, b) => b[1] - a[1]).map(([key, k]) => ({ dimensions: key.split("+"), k })),
-      outside_hook: needing.filter((r) => !lowest(r).includes("presentation")).length,
+      // The lowest score lies in intent or content only. Not the same as the
+      // hook page's "outside", which asks whether presentation is Minor or Clean.
+      intent_content_only: needing.filter((r) => !lowest(r).includes("presentation")).length,
     };
     // Kinds come from the current rubric plus any older kind a recorded review used.
     const kindsUsed = (d: Dim) => {
@@ -809,6 +878,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       }
       cells[hookKey(i)][presentationKey(r)]++;
     }
+    const shown = Object.values(cells).reduce((t, row) => t + Object.values(row).reduce((a, b) => a + b, 0), 0);
     const low = cells.blocked["1"] + cells.blocked["2"] + cells.allowed["1"] + cells.allowed["2"];
     const high = cells.blocked["3"] + cells.blocked["4"] + cells.allowed["3"] + cells.allowed["4"];
     const reviewed = members.filter((i) => ix.reference.has(i.id));
@@ -838,18 +908,28 @@ export function createDashboardApi(options: DashboardApiOptions) {
         // "allows" row, because the message is not allowed.
         warned_but_blocked: {
           corpus: ix.inputs.filter((i) => i.hook?.statuses[rule] === "warn" && i.hook.blocked).length,
-          sample: reviewed.filter((i) => i.hook?.statuses[rule] === "warn" && i.hook.blocked).length,
+          // Shown after the Costly-or-Broken count, so it counts that band only.
+          sample_low: reviewed.filter((i) => {
+            const p = first(ix, i.id)!.scores.presentation;
+            return typeof p === "number" && p <= 2 && i.hook?.statuses[rule] === "warn" && i.hook.blocked;
+          }).length,
         },
       };
     });
     return {
       cells,
       unreviewed,
+      shown,
       low,
       high,
       blocked_low: wilson(cells.blocked["1"] + cells.blocked["2"], low),
       allowed_high: wilson(cells.allowed["3"] + cells.allowed["4"], high),
-      outside: { k: needing.filter((r) => { const p = r.scores.presentation; return !(typeof p === "number" && p <= 2); }).length, needs_work: needing.length, reviewed: reviewed.length },
+      outside: {
+        k: needing.filter(outsideHook).length,
+        presentation_unknown: needing.filter(presentationUnknown).length,
+        needs_work: needing.length,
+        reviewed: reviewed.length,
+      },
       checks: checks.filter((c) => c.fires),
       silent: checks.filter((c) => !c.fires).map((c) => c.rule),
     };
@@ -860,6 +940,10 @@ export function createDashboardApi(options: DashboardApiOptions) {
     const ix = load();
     const groups = new Map<string, [ReviewRow, ReviewRow][]>();
     const excluded = new Map<string, number>();
+    // Reviews a rater wrote of a message it had already reviewed under the same rubric.
+    const repeats = new Map<string, number>();
+    for (const list of ix.reviews.values())
+      for (const r of list.filter((r) => !perRater(list).includes(r))) repeats.set(r.rater, (repeats.get(r.rater) ?? 0) + 1);
     for (const [id, list] of ix.reviews) {
       if (ix.rubricExamples.has(id)) {
         // A reviewer who meets a rubric example has been shown its severity.
@@ -911,6 +995,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       rubric_examples_with_several_reviews: [...ix.rubricExamples].filter((id) => (ix.reviews.get(id)?.length ?? 0) > 1).length,
       several_reviews: [...ix.reviews.values()].filter((l) => l.length > 1).length,
       raters: countBy([...ix.reviews.values()].flat().map((r) => r.rater)),
+      repeat_reviews_unused: [...repeats].map(([rater, n]) => ({ rater, n })),
       comparisons,
     };
   }
@@ -938,6 +1023,10 @@ export function createDashboardApi(options: DashboardApiOptions) {
       },
       picked: (i) => (ix.firstPick.has(i.id) ? [ix.firstPick.get(i.id)!] : []),
       lowest: (i) => [lowestKey(first(ix, i.id))],
+      outside: (i) => {
+        const r = first(ix, i.id);
+        return outsideHook(r) ? ["yes"] : presentationUnknown(r) ? ["unknown"] : [];
+      },
       cause: (i) => {
         const r = first(ix, i.id);
         if (!r || !needsWork(r)) return [];
@@ -1181,6 +1270,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       },
       in_fair_sample: !!ix.fair?.has(id),
       rubric_example: ix.rubricExamples.has(id),
+      unreadable_reviews: (ix.unreadable.get(id) ?? []).filter((u) => u.kind === "review"),
       observations,
       picks,
       reviews: reviewed.map((r) => ({
