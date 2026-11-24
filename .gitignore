@@ -16,3 +16,8 @@ __pycache__/
 /data/*
 !/data/README.md
 /node_modules/
+/dashboard/node_modules/
+/dashboard/dist/
+# Design-skill session caches.
+/dashboard/.impeccable/hook.cache.json
+/dashboard/.impeccable/questions/

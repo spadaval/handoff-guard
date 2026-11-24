@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T21:20:00Z",
+  "title": "Design System: Handoff review",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "primary", "displayName": "Ink" },
+      "hook": { "role": "meaning", "displayName": "Hook blue", "purpose": "Anything the hook measured or decided." },
+      "reviewer": { "role": "meaning", "displayName": "Reviewer magenta", "purpose": "Anything a model reviewer quoted or judged bad." },
+      "score-4": { "role": "status", "displayName": "4 Clean" },
+      "score-3": { "role": "status", "displayName": "3 Minor" },
+      "score-2": { "role": "status", "displayName": "2 Costly" },
+      "score-1": { "role": "status", "displayName": "1 Broken" },
+      "unknown": { "role": "status", "displayName": "Unknown" },
+      "ground": { "role": "neutral", "displayName": "Bond ground" },
+      "dark-ground": { "role": "neutral", "displayName": "Carbon ground (dark)" }
+    },
+    "typographyMeta": {
+      "hero": { "displayName": "Hero figure", "purpose": "One headline share per view." },
+      "message": { "displayName": "Record", "purpose": "Message text, quotes, rewrites, identifiers, docket numbers." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "flash", "value": "900ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "One flash on the highlight a citation jumps to." },
+      { "name": "state", "value": "150ms", "purpose": "List dimming while a filter reloads." }
+    ],
+    "breakpoints": [
+      { "name": "stack-reader", "value": "1080px" },
+      { "name": "stack-grids", "value": "1000px" },
+      { "name": "stack-filters", "value": "900px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Segmented control",
+      "kind": "custom",
+      "refersTo": "segment-selected",
+      "description": "Switches sample, criterion or grouping; the selected segment is solid ink.",
+      "html": "<div class=\"ds-seg\"><button aria-pressed=\"true\">Random <span>60</span></button><button>Pilot <span>30</span></button><button>All strata <span>150</span></button></div>",
+      "css": ".ds-seg{display:inline-flex;border:1px solid #c6c9ce;border-radius:4px;overflow:hidden;background:#fff;font:520 13px 'Libre Franklin',system-ui,sans-serif}.ds-seg button{border:0;border-left:1px solid #e1e2e4;background:transparent;padding:0 10px;height:28px;color:#464b55}.ds-seg button:first-child{border-left:0}.ds-seg button[aria-pressed=true]{background:#16181d;color:#fcfcfb}.ds-seg span{opacity:.7;margin-left:4px}"
+    },
+    {
+      "name": "Highlighted message line",
+      "kind": "custom",
+      "description": "Numbered source line in the record face with a hook span and a reviewer quote.",
+      "html": "<div class=\"ds-line\"><span class=\"n\">3</span><span class=\"t\">Next: <mark class=\"hk\">shipitnowafterCI</mark> then <mark class=\"rv\">report back</mark>.</span></div>",
+      "css": ".ds-line{display:grid;grid-template-columns:36px 1fr;font:14.5px/1.62 'Courier Prime','Courier New',monospace;color:#16181d}.ds-line .n{text-align:right;padding-right:12px;color:#676d78;font-size:12px;border-right:1px solid #e1e2e4;margin-right:12px}.ds-line mark{color:inherit;background:transparent}.ds-line .hk{background:#e2ebfb;box-shadow:inset 0 -2px 0 #1f5fd1}.ds-line .rv{background:#fbe1f0}"
+    },
+    {
+      "name": "Citation",
+      "kind": "chip",
+      "refersTo": "citation-reviewer",
+      "description": "Line and column of a highlight; clicking jumps to it.",
+      "html": "<button class=\"ds-cite\">L3:1491</button>",
+      "css": ".ds-cite{border:1px solid #b3127a;background:#fbe1f0;border-radius:3px;font:700 12px 'Courier Prime',monospace;padding:0 6px;height:22px;color:#16181d}"
+    },
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Standard action.",
+      "html": "<button class=\"ds-btn\">Open the comparison</button>",
+      "css": ".ds-btn{height:30px;padding:0 10px;border:1px solid #c6c9ce;border-radius:4px;background:#fff;font:550 13px 'Libre Franklin',system-ui,sans-serif;color:#16181d}.ds-btn:hover{border-color:#676d78}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Transcript of record",
+    "overview": "Exact message text beside every judgment of it. Messages in a typewriter face in numbered lines, highlights cited by line and column, figures with numerator, denominator and interval. Ink on a near-neutral ground with hairlines; colour only for meaning.",
+    "keyCharacteristics": ["One colour per meaning", "Every share carries k/n and its sample", "Citations jump to the text", "No shadows or ornament"],
+    "rules": [
+      { "name": "The one-meaning rule", "body": "Blue is the hook, magenta is the reviewers, the four-step scale is the rubric, grey is unknown. Nothing else gets a hue.", "section": "colors" },
+      { "name": "The denominator rule", "body": "A share is never shown without k/n and the sample it describes.", "section": "colors" },
+      { "name": "The record rule", "body": "Text that is the record (messages, quotes, identifiers) is set in Courier Prime; commentary is set in Libre Franklin.", "section": "typography" }
+    ],
+    "dos": ["Show messages exactly as written", "Cite every highlight by line and column", "Name the sample under every figure"],
+    "donts": ["Decorate with paper texture or legal wording", "Use a meaning colour for links or hover", "Add shadows, gradients or glass"]
+  }
+}

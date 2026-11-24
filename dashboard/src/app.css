@@ -1,0 +1,386 @@
+/*
+ * One colour per meaning, in every view:
+ *   --hook      anything the hook measured or decided
+ *   --reviewer  anything a model reviewer quoted
+ *   --s4..--s1  the rubric scale, and the verdict derived from it
+ *   --unknown   null scores, unknown models, missing data
+ * Everything else is ink on ground, separated by hairlines. No shadows.
+ */
+:root {
+  color-scheme: light;
+  --ground: #fcfcfb;
+  --sunken: #f3f3f0;
+  --raised: #ffffff;
+  --ink: #16181d;
+  --ink-2: #464b55;
+  --ink-3: #676d78;
+  --rule: #e1e2e4;
+  --rule-2: #c6c9ce;
+  --bar: #16181d;
+  --bar-ink: #f3f3f0;
+  --bar-ink-2: #a9adb5;
+
+  --hook: #1f5fd1;
+  --hook-tint: #e2ebfb;
+  --hook-tint-2: #c9daf8;
+  --reviewer: #b3127a;
+  --reviewer-tint: #fbe1f0;
+  --reviewer-tint-2: #f5c3e1;
+  --s4: #2f7d52;
+  --s3: #77a35a;
+  --s2: #b07a0c;
+  --s1: #c2342b;
+  --unknown: #9196a0;
+  --s4-tint: #e3f1e8;
+  --s2-tint: #f8eed6;
+  --s1-tint: #f9e1df;
+  --focus: #16181d;
+  --flash: #ffe46b;
+
+  --sans: "Libre Franklin Variable", "Libre Franklin", system-ui, sans-serif;
+  --type: "Courier Prime", "Courier New", ui-monospace, monospace;
+
+  --t-xs: 0.75rem;
+  --t-sm: 0.8125rem;
+  --t-md: 0.9375rem;
+  --t-lg: 1.125rem;
+  --t-xl: 1.375rem;
+  --t-2xl: 1.75rem;
+  --t-hero: 3.25rem;
+
+  --gutter: 24px;
+  --page: 1360px;
+  --bar-h: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ground: #0f1319;
+    --sunken: #141a22;
+    --raised: #171d26;
+    --ink: #e6e8ec;
+    --ink-2: #b5bac3;
+    --ink-3: #8d939e;
+    --rule: #242b35;
+    --rule-2: #39414d;
+    --bar: #080b0f;
+    --bar-ink: #e6e8ec;
+    --bar-ink-2: #8d939e;
+
+    --hook: #4f86ec;
+    --hook-tint: #16254a;
+    --hook-tint-2: #1f3466;
+    --reviewer: #d9509f;
+    --reviewer-tint: #3a1730;
+    --reviewer-tint-2: #552042;
+    --s4: #3aa76a;
+    --s3: #7fae5f;
+    --s2: #bf8a24;
+    --s1: #e0574d;
+    --unknown: #6f7682;
+    --s4-tint: #13291d;
+    --s2-tint: #2e2410;
+    --s1-tint: #3a1715;
+    --focus: #e6e8ec;
+    --flash: #6b5a10;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scrollbar-color: var(--rule-2) transparent;
+}
+body {
+  margin: 0;
+  background: var(--ground);
+  min-height: 100vh;
+}
+::selection {
+  background: var(--ink);
+  color: var(--ground);
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: var(--t-2xl);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+h2 {
+  font-size: var(--t-lg);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+}
+h3 {
+  font-size: var(--t-md);
+  font-weight: 650;
+}
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--rule-2);
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+code,
+.type {
+  font-family: var(--type);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.muted {
+  color: var(--ink-3);
+}
+.quiet {
+  color: var(--ink-2);
+}
+.small {
+  font-size: var(--t-sm);
+}
+.xs {
+  font-size: var(--t-xs);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Standard controls, drawn once. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  background: var(--raised);
+  font-size: var(--t-sm);
+  font-weight: 550;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn:hover {
+  border-color: var(--ink-3);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn.ghost:hover {
+  border-color: var(--rule-2);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--raised);
+}
+.seg button {
+  border: 0;
+  border-left: 1px solid var(--rule);
+  background: transparent;
+  padding: 0 10px;
+  height: 28px;
+  font-size: var(--t-sm);
+  font-weight: 520;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.seg button:first-child {
+  border-left: 0;
+}
+.seg button:hover {
+  color: var(--ink);
+  background: var(--sunken);
+}
+.seg button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ground);
+}
+.seg button .count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+input[type="search"],
+input[type="text"],
+select {
+  height: 32px;
+  border: 1px solid var(--rule-2);
+  border-radius: 4px;
+  background: var(--raised);
+  padding: 0 10px;
+  font-size: var(--t-sm);
+}
+input[type="search"]:focus,
+select:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+input[type="checkbox"] {
+  accent-color: var(--ink);
+  margin: 0;
+}
+
+/* Tables */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+table.data th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--rule-2);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+table.data td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+table.data th.r,
+table.data td.r {
+  text-align: right;
+}
+table.data tbody tr.link {
+  cursor: pointer;
+}
+table.data tbody tr.link:hover td {
+  background: var(--sunken);
+}
+
+/* Verdict and score marks: colour plus a word, never colour alone. */
+.score {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.score::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--c, var(--unknown));
+}
+.c4 {
+  --c: var(--s4);
+}
+.c3 {
+  --c: var(--s3);
+}
+.c2 {
+  --c: var(--s2);
+}
+.c1 {
+  --c: var(--s1);
+}
+.cnull {
+  --c: var(--unknown);
+}
+
+.page {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 28px var(--gutter) 80px;
+}
+.section {
+  border-top: 1px solid var(--rule-2);
+  padding-top: 20px;
+  margin-top: 36px;
+}
+.section > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.section > header p {
+  font-size: var(--t-sm);
+  color: var(--ink-3);
+}
+.note {
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  max-width: 78ch;
+}
+.empty {
+  padding: 24px 0;
+  color: var(--ink-3);
+  font-size: var(--t-sm);
+}
+.skeleton {
+  background: var(--sunken);
+  border-radius: 3px;
+  min-height: 1em;
+}
+.error {
+  border: 1px solid var(--s1);
+  background: var(--s1-tint);
+  border-radius: 4px;
+  padding: 12px 14px;
+  font-size: var(--t-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

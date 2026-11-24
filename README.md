@@ -182,15 +182,12 @@ without echoing message text.
 
 ## Inspect context and communication grades
 
-The versioned Svelte application is in [dashboard/](dashboard/README.md), including
-installation instructions for the existing Artifact Hub server.
-
-The [context dashboard](http://ai-assistant-ia:5173/artifacts/handoff-context-review/)
-reads a page of messages directly from SQLite in a full-window view. It opens
-on the contextual pilot, with rewrite cases first. The message,
-strategic context and tactical assessments form one reading flow. Cited evidence
-expands beneath the explanation it supports; raw source data is available at the
-bottom. Each assessment stays attached to its recorded context. See the
+The review dashboard is a standalone app in [dashboard/](dashboard/README.md).
+Run `npm run dev` in that directory; it serves the app and a read-only API over
+SQLite from one process. It gives an overview of review and hook results by
+sender model, project, month and size, compares the hook with the model
+reviewers, and shows each message exactly as written beside its review, hook
+result and recorded context. See the
 [database guide](docs/context-database.md),
 [dashboard guide](docs/context-dashboard.md) and [communication rubric](docs/communication-rubric.md).
 
@@ -203,16 +200,14 @@ node scripts/handoff.ts validate
 node scripts/handoff.ts mechanics
 ```
 
-The dashboard reads SQLite through a read-only API in the existing Artifact Hub
-server. It loads one page of previews and the selected message, with search and
-filters evaluated in SQLite. Click Refresh data after database updates; no JSON
-export or publication step is needed.
+The dashboard reads SQLite through its read-only API and picks up new reviews
+and diagnostics without a restart; no JSON export or publication step is needed.
 Raw data stays out of Git. The context pilot does not change hook policy.
 
-Contextual assessments include participant roles, message
-stage/type and task summaries. [Mechanical diagnostics](docs/mechanical-checks.md)
-come from `handoff-guard inspect`, sharing the hook implementation.
-The dashboard groups measured size and style checks within readability and
-excludes v1 scores. The current rubric defines two independent tactical scores;
-older observations are not converted into new scores. Existing denial thresholds and
-global activation are unchanged.
+Reviews score intent, content and presentation under the
+[communication rubric](docs/communication-rubric.md).
+[Mechanical diagnostics](docs/mechanical-checks.md) come from
+`handoff-guard inspect`, sharing the hook implementation. The dashboard shows
+the hook's checks beside the model review and never combines them into one
+score. Nothing in this repository activates the hook; installation is the
+separate step above.

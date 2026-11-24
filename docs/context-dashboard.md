@@ -1,101 +1,88 @@
-# Review a message in its strategic and tactical context
+# Review dashboard
 
-Open the [handoff review dashboard](http://ai-assistant-ia:5173/artifacts/handoff-context-review/).
-It reads `data/handoffs.sqlite3` through the existing Artifact Hub server.
-There is no corpus download, JSON publication step, second service or extra port.
+The dashboard in [`dashboard/`](../dashboard/README.md) is where the corpus is
+read and the analysis is judged. It answers four questions: how common fused
+shorthand is and where it comes from, where the hook and the model reviewers
+disagree, what one message says and how it was judged, and which messages match
+a search. Run it with `npm run dev` in `dashboard/`; the README lists the
+environment variables.
 
-The left message list selects the message. There is no right sidebar. The main
-area is one centered reading flow, in this order:
+## What each number means
 
-1. The project name and a pictorial sender → message type → recipient exchange.
-   There is no status strip or in-page navigation.
-2. The exact original message, with its word and character counts beside Message.
-3. **Situation & intent:** unscored model context describing the work, immediate
-   trigger and the information or action the sender wants to convey.
-4. **Information selection:** length-policy checklist, model assessment, agreement.
-5. **Presentation:** surface-check checklist, model assessment, agreement.
+- **Samples.** Reviews come from frozen samples in `manual-review` runs. Each
+  sampled input has a stratum: `random`, `pilot` (inputs with earlier
+  reviews), `fused` (long runs of letters without spaces) or `long`. Only
+  `random` estimates the corpus. The sample switch applies to every figure on
+  the Overview and on Hook vs reviewers, and the page states which sample a
+  figure describes.
+- **Bad.** Reviewers call an input bad when its verdict is `revise` or
+  `rewrite`, or, with the other setting, when its presentation score is 1 or 2.
+  The verdict is computed with `verdict()` from `tooling/reviews.ts`.
+- **Intervals.** Every share is shown as `k/n` with a 95% Wilson interval.
+- **Hook.** Lists and aggregates use the newest stored report per input in
+  `mechanical_results`. "Blocks" means the report's `blocked` is true; "warns"
+  means it is not blocked but a check has a status other than `pass`. Warnings
+  do not stop delivery, so a warned bad input counts as a miss.
+- **Months.** An input's month is the month of its earliest recorded
+  observation. Months between the first and last with no inputs are shown as
+  empty, not left out.
+- **Sender model.** *Recorded* is the turn-context model at send time, present
+  for about a quarter of inputs. *Thread setting* adds the sending thread's
+  saved model selection at export time, which can differ from the model that
+  wrote the message. Unknown stays Unknown.
+- **Rubric versions.** Each review shows the rubric version of its run. When
+  reviews were recorded under an older version than the rubric file, the
+  Overview says so, and issue kinds that the current rubric no longer lists are
+  still counted and marked as retired.
 
-Each tactical block keeps Hook and Model labels visible beside their respective
-scores. Checklists show measured passes, failures and missing checks as distinct
-states. Punctuation-spacing and shorthand signals use an advisory state; they are
-implemented in Rust and do not deny delivery. Clicking a quoted finding highlights that exact passage in
-the original without rewriting it.
+## The message reader
 
-An **Evidence** disclosure appears directly beneath a situation, intent or model
-judgment when it cites surrounding records. It opens in place and contains only
-sources explicitly cited for that claim. The original message is not duplicated
-as surrounding evidence; presentation quotes already link to that message.
-Each excerpt identifies its recorded kind, available time and visibility. Sender
-history is explicitly distinguished from recipient-visible information. Partial
-recovery and omitted text remain visible. Displaying a citation does not claim
-that the citation proves recipient access.
+The message is shown exactly as written, in numbered source lines, with
+whitespace preserved and long unbroken runs wrapped anywhere. Hook spans are
+blue with an underline (solid for a blocking check, thin for a warning);
+reviewer quotes are a magenta highlight. Every highlight is cited as
+`L<line>:<column>`, counted in Unicode characters; clicking a citation scrolls
+to the passage, and `j`/`k` step through all highlights in order.
 
-**Inspect recorded source data** sits at the bottom for investigation. Its record
-selector changes only the raw record being inspected, never the assessment above.
-Evidence and raw JSON are rendered when opened, keeping the default reading flow
-focused. The API and database are unchanged.
+The hook result is a live run of `target/release/handoff-guard inspect` on that
+message, so it always reflects the current rules. If it differs from the stored
+report used in lists and figures, the reader lists the differences. If the
+binary is missing, the stored report is shown with a note.
 
-The [five-point rubric](communication-rubric.md) anchors the two tactical scales.
-Hook scores decline continuously with measured burden and are shown to one
-decimal: length utilization for information selection and the worst normalized
-surface signal for presentation. They do not
-establish semantic completeness or overall readability. The agreement line
-compares pass/revise signals within that coverage. Earlier model explanations
-remain visible and explicitly labeled; their numeric scores are absent until a
-fresh review under the five-point rubric. There is no combined score and no v1
-assessment display.
+When a review includes a plain-English rewrite, "Beside the rewrite" shows the
+original (or the rewritten passage) and the rewrite in two columns with their
+character and word counts.
 
-Roles in the exchange graph have distinct colors and SVG icons, with visible
-role names retained. The interface uses a dark palette, full-window shell and
-bounded reading measure.
-The main sections use the generated design study as visual inspiration, with the
-actual message, measurements and recorded reviews supplying the content.
+Recorded context lists every observation of the body (source, kind, tool, time,
+thread, model at send, thread setting) and the recovered contexts with their
+evidence and referenced files. Evidence and file excerpts are capped at 1,000
+characters with the omitted count shown; the full text stays in SQLite.
 
-## Requests and search
+## API
 
-- `GET /api/handoff-review/messages` returns at most 50 previews, the matching
-  count, corpus counts and filter choices. `view` is `reviewed`, `inputs`,
-  `outputs` or `all`; `page` starts at zero.
-- `GET /api/handoff-review/messages/<body-sha256>` returns that message, its
-  contexts, evidence, references, current reviews and mechanical results.
-- `query` searches full stored message text, message ID, project and review
-  classification. It is not restricted to previews. SQLite's built-in ASCII
-  case folding does not cover every Unicode character.
+All endpoints are GET only, open SQLite read-only with `query_only`, and return
+`Cache-Control: no-store`. Invalid parameters return 400 with a message that
+names the parameter.
 
-Search is debounced; obsolete requests are cancelled. **Refresh data** rereads
-SQLite. No export is needed after importing reviews or diagnostic results.
-Supporting excerpts are capped at 1,000 Unicode characters with explicit omission
-counts; longer text remains in SQLite. Markdown evidence is sanitized and active
-content is disabled. Raw source fields remain separately available.
+- `GET /api/meta`: corpus counts, runs and their progress, strata, hook run,
+  whether stored reports match the current binary, and filter values.
+- `GET /api/overview?sample=&criterion=&basis=`: verdicts, score
+  distributions, issue kinds, breakdowns by model, project, size and month, the
+  onset months and the screening table.
+- `GET /api/messages?…`: filtered, sorted, paginated previews with facet
+  counts. Filters include `q`, `sample`, `run`, `split`, `review`, `reviewer`,
+  `hook`, `flag` (`rule:status`), `issue`, `intent`, `content`,
+  `presentation`, `rewrite`, `model` with `basis`, `project`, `month`, `size`
+  and `kind`. `ids=1` adds the ordered IDs of every match.
+- `GET /api/messages/<sha256>`: one message with observations, samples,
+  reviews, earlier reviews, live and stored hook reports and contexts.
+- `GET /api/rubric`: the rubric file as written.
 
-The API accepts GET only, opens SQLite read-only, enables query_only and returns
-Cache-Control: no-store. Its database path is server configuration, not browser
-input. Raw data and the database remain outside Git.
+Tests are in `tests/dashboard-api.test.ts` and use invented text only.
 
-## Install in the existing server
+## Reviewing changes
 
-The versioned application source is in [dashboard/](../dashboard/README.md).
-Install its files into Artifact Hub before registering the API below.
-
-Node 24's built-in SQLite module is sufficient. In `/artifact-hub/vite.config.ts`,
-import and register the plugin before artifact routing:
-
-```ts
-import { handoffReviewApi } from '/root/handoff-guard/scripts/dashboard-api.ts';
-
-// Inside plugins:
-handoffReviewApi('/root/handoff-guard/data/handoffs.sqlite3'),
-```
-
-Adjust repository paths on another installation. Vite reloads its configuration;
-use `/artifact-hub/bin/artifact-hub restart` if needed. The API shares the Hub's
-trusted-network access model. Missing database access produces a retryable error.
-
-## Review changes visually
-
-There are no automated UI tests or browser assertion suites. Judge UI changes by
-reading and using the rendered page with short, long and poorly written messages.
-The single-flow layout was inspected visually at desktop and mobile sizes,
-including opening claim-specific evidence, inspecting raw records and reading
-a short message. Keep type/compiler diagnostics separate from
-readability and usability judgments.
+There are no automated UI tests. Judge changes by using the rendered app in a
+browser in light and dark, at laptop width and narrower, with short, long and
+fused messages. Screenshots of the app contain message text and stay out of
+Git.

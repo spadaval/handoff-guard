@@ -37,12 +37,17 @@ to communicate clearly; do not compress prose merely to make it shorter.
 
 ## Review dashboard
 
-The canonical dashboard source is in `dashboard/`. Artifact Hub serves a copy at
-`/artifact-hub/artifacts/handoff-context-review/`; keep source edits in the repo
-and synchronize the served copy when iterating. See `dashboard/README.md`.
+The dashboard is a standalone app in `dashboard/` with its own `package.json`.
+`npm run dev` there serves the app and the read-only API from
+`scripts/dashboard-api.ts`. See `dashboard/README.md` for the environment
+variables and `docs/context-dashboard.md` for what each figure means.
 
-- Use dark colors by default, with readable text and a full-window shell.
-- Preserve the single reading flow and the distinction between Hook and Model.
+- Show messages exactly as written. Keep hook spans and reviewer quotes
+  distinct, and keep the hook's result separate from the reviewers' judgment.
+- Give every share its numerator, denominator and sample. Only the `random`
+  stratum estimates the corpus.
+- Render hook checks from the report; do not hard-code rule names.
+- Follow the system light or dark preference, and keep both complete.
 - Do not add automated UI tests or browser assertion suites. Judge readability
   and usability by viewing and using the rendered page. Compiler diagnostics
   are separate from visual review. Backend and Rust checks remain appropriate.

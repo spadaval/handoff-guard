@@ -5,9 +5,9 @@ It is ignored by Git. Configuration, rubric definitions, review instructions and
 executable source stay in ordinary tracked files. Runs reference those files and
 record their hashes; a database is not needed to read or edit the rubric.
 
-The existing dashboard reads this database through the read-only Artifact Hub
-API. It requests message previews and selected details, without a JSON snapshot.
-No export or publishing step is required after a database update.
+The [review dashboard](../dashboard/README.md) reads this database through its
+own read-only API. It requests message previews and selected details, without a
+JSON snapshot. No export or publishing step is required after a database update.
 
 ## Use the existing dataset
 
@@ -118,8 +118,8 @@ The abandoned file-oriented review CLIs and working-file archive have been remov
 node scripts/handoff.ts compact
 ```
 
-Stop Artifact Hub with its existing management CLI before maintaining the live
-database, then start it again afterwards. Do not create another server.
+Stop the dashboard server before maintaining the live database, then start it
+again afterwards.
 
 The schema is declared in `tooling/db/schema.ts`. Reviewed SQL migrations and
 Drizzle snapshots live in `migrations/`, with `drizzle.config.ts` as configuration.
