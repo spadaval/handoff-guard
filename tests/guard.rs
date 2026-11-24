@@ -308,6 +308,10 @@ fn missing_spaces_blocks_words_joined_by_punctuation() {
     // code spans hold half the message.
     let wrapped = fused.split_whitespace().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(" ");
     assert_eq!(check(&wrapped).unwrap().0, "missing_spaces");
+    // Wrapping each expression and leaving the commas outside does not help:
+    // a comma standing alone is not a word.
+    let commas = "`checked/tested`, `built/passed`, `fixed/pushed`, ".repeat(7);
+    assert_eq!(check(&commas).unwrap().0, "missing_spaces");
     // A few code spans in ordinary prose stay literal.
     let prose = "Please run `cargo test --locked --all-features --no-fail-fast` and tell me which tests fail. ".repeat(6);
     assert_eq!(check(&prose), None);
@@ -429,11 +433,15 @@ fn codex_mcp_events_for_t3_code_tools() {
 #[test]
 fn glued_values_blocks_numbers_and_hashes_stuck_to_words() {
     // Every word is spaced and short, so only the glued values give it away.
-    let numbers = "Author fresh supported246 tests, each ran serial, both exits0 with unchanged233 cases. Please confirm the count.";
+    let numbers = "Author fresh supported246 tests, each ran serial, with reviewed81 and unchanged233 cases. Please confirm the count.";
     assert_eq!(check(numbers).unwrap().0, "glued_values");
-    // A hash stuck to the word before it is blocked on its own: it will be copied wrongly.
+    // A hash stuck to the word before it is blocked on its own: it will be
+    // copied wrongly. That holds when the word ends in letters a hash could have.
+    for word in ["commit", "ref", "used", "made", "trace", "exactly"] {
+        let hash = format!("Please review the change at {word}4f2a9c1e07 and report what you find.");
+        assert_eq!(check(&hash).unwrap().0, "glued_values", "{word}");
+    }
     let hash = "Please review the change at commit4f2a9c1e07 and report what you find.";
-    assert_eq!(check(hash).unwrap().0, "glued_values");
     let reason = hook(&json!({"hook_event_name":"PreToolUse","tool_name":"spawn_agent","tool_input":{"message":hash}}))
         ["hookSpecificOutput"]["permissionDecisionReason"]
         .as_str()
@@ -441,16 +449,20 @@ fn glued_values_blocks_numbers_and_hashes_stuck_to_words() {
         .to_owned();
     assert!(reason.contains("“commit4f2a9c1e07”"), "{reason}");
     assert!(reason.contains("backticks"));
-    // The same content written properly passes.
+    // The same content written properly passes, and so do ordinary names.
     for text in [
-        "Author 246 fresh supported tests. Each ran serially, both exited 0, and 233 cases are unchanged.",
+        "Author 246 fresh supported tests. Each ran serially, 81 were reviewed, and 233 cases are unchanged.",
         "Please review the change at commit `4f2a9c1e07` and report what you find.",
         "Please review the change at commit 4f2a9c1e07 and report what you find.",
         "Please review `commit4f2a9c1e07` exactly as named in the tracker.",
-        // Names that end in a number are ordinary, and one or two are fine.
+        "Please test Python3 with SQLite3 and OAuth2 enabled.",
         "Use python3 with sha256 and base64 over http2, then check utf8 output on arm64.",
+        "Read release20261124.txt.",
+        "Read release20261124.txt and backup20261123.tar, then compare them.",
+        // A bare hash is fine even when it happens to start with letters.
         "The run 4f2a9c1e07ab passed and deadbeef1234 failed; see step1 and round2.",
         "Read docs/notes-v2.md and build_2026_final, then open ./logs/run20261124.txt.",
+        "Tickets ABC-1234 and PROJ-5678 are fixed in v2.14.3 as of 2026-11-24 at 16:30.",
     ] {
         assert_eq!(check(text), None, "{text}");
     }
@@ -459,5 +471,5 @@ fn glued_values_blocks_numbers_and_hashes_stuck_to_words() {
     assert_eq!(glued["measurements"]["glued_number_words"], 3);
     let chars: Vec<_> = numbers.chars().collect();
     let found: Vec<String> = glued["spans"].as_array().unwrap().iter().map(|s| chars[s["start"].as_u64().unwrap() as usize..s["end"].as_u64().unwrap() as usize].iter().collect()).collect();
-    assert_eq!(found, ["supported246", "exits0", "unchanged233"]);
+    assert_eq!(found, ["supported246", "reviewed81", "unchanged233"]);
 }

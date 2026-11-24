@@ -14,8 +14,8 @@ const FUSED_RUNS: usize = 2;
 const LONG_WORD_CHARACTERS: usize = 20;
 const SPACING_MIN_WORDS: usize = 20;
 const SPACING_MEAN_CHARACTERS: f64 = 9.0;
-/// A word with a number stuck to its end, as in "supported246". One can be a
-/// name such as "python3"; several different ones is a habit.
+/// A word with a number of two or more digits stuck to its end, as in
+/// "supported246". One can be a name; several different ones is a habit.
 const GLUED_NUMBER_WORDS: usize = 3;
 /// Short names such as "http2", "base64" and "utf8" are ordinary, so the word must be longer.
 const GLUED_WORD_LETTERS: usize = 5;
@@ -268,7 +268,10 @@ fn words_of(chars: &[char]) -> Words {
                 match (inside, token_start) {
                     (true, None) => token_start = Some(i),
                     (false, Some(t)) => {
-                        if !literal(&chars[t..i]) {
+                        // Punctuation left standing alone, such as a comma
+                        // after a code span, is not a word.
+                        let wordlike = chars[t..i].iter().any(|c| c.is_alphanumeric());
+                        if wordlike && !literal(&chars[t..i]) {
                             if in_code {
                                 words.code.push((t, i));
                             } else {
@@ -463,27 +466,26 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
                 .find(|&j| !chars[j].is_ascii_alphanumeric())
                 .unwrap_or(end);
             let run = &chars[i..run_end];
+            // Split the run at its first digit: the word, then what is stuck to it.
             let letters = run.iter().take_while(|c| c.is_ascii_alphabetic()).count();
-            // A hash: the run ends in seven or more hex characters with a digit
-            // among them, after a word that is not itself hex.
-            let hex = run
-                .iter()
-                .rev()
-                .take_while(|c| c.is_ascii_digit() || matches!(c, 'a'..='f'))
-                .count();
-            let word = &run[..run.len() - hex];
-            let hash = hex >= GLUED_HASH_CHARACTERS
-                && run[run.len() - hex..].iter().any(char::is_ascii_digit)
+            let (word, tail) = run.split_at(letters);
+            let digits = tail.iter().take_while(|c| c.is_ascii_digit()).count();
+            // A hash: seven or more hex characters with both digits and
+            // letters, stuck to a word that could not itself be part of a
+            // hash. A bare hash that happens to start with letters is left alone.
+            let hash = tail.len() >= GLUED_HASH_CHARACTERS
+                && tail.iter().all(|c| c.is_ascii_digit() || matches!(c, 'a'..='f'))
+                && tail.iter().any(|c| matches!(c, 'a'..='f'))
                 && word.len() >= 3
-                && word.iter().all(char::is_ascii_alphabetic)
                 && word.iter().any(|c| !c.is_ascii_hexdigit());
-            let number = letters >= GLUED_WORD_LETTERS
-                && letters < run.len()
-                && run[letters].is_ascii_digit();
+            // A number: two or more digits stuck to a word of five or more
+            // letters. A single digit ends too many ordinary names ("Python3",
+            // "OAuth2", "SQLite3") to count.
+            let number = !hash && letters >= GLUED_WORD_LETTERS && digits >= 2;
             if hash {
                 hashes += 1;
             } else if number {
-                number_words.insert(run[..letters].iter().collect::<String>().to_ascii_lowercase());
+                number_words.insert(word.iter().collect::<String>().to_ascii_lowercase());
             }
             if hash || number {
                 glued.push((i, run_end));

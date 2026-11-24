@@ -51,7 +51,9 @@ presentation unblocked. Those handoffs keep their spaces, so their average
 word is 8 to 9 characters and no letter run is long. What they share is
 numbers and hashes stuck to words: `supported246`, `exits0`,
 `committed61000c4…`. The check blocks one glued hash, or three different
-words of five or more letters with a number stuck to the end.
+words of five or more letters with a number of two or more digits stuck to
+the end. A single trailing digit is left alone, because it ends too many
+ordinary names such as `Python3` and `OAuth2`.
 
 It was written by reading those misses, so the reviewed handoffs are not an
 independent test of it. The only evidence from outside that reading is the

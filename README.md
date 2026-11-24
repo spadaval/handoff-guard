@@ -28,11 +28,11 @@ Five checks can block a handoff. Each applies to the whole resolved message.
   words. Ordinary prose averages 5 to 7. This catches words joined by slashes,
   commas and plus signs, where no single letter run is long.
 - **Glued values.** A hash stuck to the word before it, as in
-  `commit4f2a9c1e07`, or three or more different words with a number stuck to
-  the end, as in `supported246`. A glued hash gets copied wrongly, and glued
-  counts are how the shorthand looks once it keeps its spaces. Short names such
-  as `http2`, `base64` and `utf8` do not count, and one or two longer ones such
-  as `python3` are allowed.
+  `commit4f2a9c1e07`, or three or more different words with a number of two or
+  more digits stuck to the end, as in `supported246`. A glued hash gets copied
+  wrongly, and glued counts are how the shorthand looks once it keeps its
+  spaces. A single trailing digit does not count, so names such as `Python3`,
+  `OAuth2` and `http2` are fine, and so is a bare hash.
 - **Repetition.** One word makes up 80% of 100 or more words, or one line of 20
   or more characters repeats ten times and makes up 80% of the message.
 
@@ -71,7 +71,7 @@ is the only thing it can see. On the fair sample the checks block:
 | 3 Minor, a small fix would help | 8 of 14 |
 | 4 Clean | 0 of 19 |
 
-They block 2,195 of the 3,464 handoff inputs in the corpus (63%). The eight
+They block 2,090 of the 3,464 handoff inputs in the corpus (60%). The eight
 Minor handoffs they block each have a hash glued to a word, which is the
 defect reviewers marked. Without the glued-values check the figures are 14 of
 15, 25 of 38, none of 14 and none of 19, and 35% of the corpus.
