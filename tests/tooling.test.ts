@@ -636,6 +636,27 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
     assert.equal(needsWork(r), null);
     // A review from before handoff-v9 keeps the score its reviewer wrote.
     assert.equal(score({ score: 2, reason: "", issues: [issue] }), 2);
+    // An issue that cannot be graded leaves the question unknown, never Clean.
+    assert.equal(
+      score({ reason: "", issues: [{ ...issue, severity: undefined }] }),
+      null,
+    );
+    assert.equal(
+      score({
+        reason: "",
+        issues: [{ ...issue, severity: "costlly" as never }],
+      }),
+      null,
+    );
+    assert.equal(score({ reason: "", issues: "" as never }), null);
+    assert.throws(
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: { issues: "" as never, reason: "Not a list." },
+        }),
+      /must be a list/,
+    );
     assert.throws(
       () => recordReview(f.db, "review", { ...r, message_id: "unknown" }),
       /outside/,
@@ -711,6 +732,28 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
           count: 1,
         }),
       /outside the fair sample/,
+    );
+    // A config whose seed differs from the one the runs were drawn with would
+    // put the messages in a different order, so it is refused.
+    const reseeded = join(f.root, "reseeded.json");
+    writeFileSync(
+      reseeded,
+      JSON.stringify({
+        ...JSON.parse(
+          readFileSync(resolve(ROOT, "config/review.json"), "utf8"),
+        ),
+        seed: 1,
+      }),
+    );
+    assert.throws(() => probabilitySample(f.db, reseeded), /seed/);
+    // The same reviewer cannot draw the same message twice under one rubric.
+    assert.throws(
+      () =>
+        sampleReview(f.db, "fourth", 0, "another", undefined, undefined, {
+          start: 0,
+          count: 1,
+        }),
+      /already has a sample/,
     );
     assert.throws(
       () =>

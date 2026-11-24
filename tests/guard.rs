@@ -121,14 +121,18 @@ fn punctuation_in_glued_sentences_does_not_exempt_the_paragraph() {
     // typographic mark does not turn prose into an identifier.
     assert_eq!(check(&format!("```\n{text}\n~~~")).unwrap().0, "fused_words");
     assert_eq!(check(&format!("````\n```\n{text}\n```\n````")), None);
-    // A code span among prose is literal, but wrapping the message in backticks is not a way out.
-    assert_eq!(
-        check(&format!("{} Run ``{}`` exactly as written.", "Please read the notes first. ".repeat(40), text.trim())),
-        None
-    );
+    // A code span among prose is literal for word length, but backticks do not
+    // hide fused words: whole, word by word, or as a double-backtick span.
     assert_eq!(check(&format!("`{}`", text.trim())).unwrap().0, "fused_words");
+    assert_eq!(check(&format!("``{}``", text.trim())).unwrap().0, "fused_words");
     let wrapped = text.split_whitespace().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(" ");
     assert_eq!(check(&wrapped).unwrap().0, "fused_words");
+    // Real identifiers in backticks are fine at any length, because capitals
+    // break them into short runs. Outside backticks two of them still block.
+    let identifiers = "Use `RequestAuthenticationConfiguration` and `ResponseAuthorizationConfiguration`.";
+    assert_eq!(check(identifiers), None);
+    assert_eq!(check(&identifiers.replace('`', "")).unwrap().0, "fused_words");
+    assert_eq!(check("Run `getOrchestrationProjectionSnapshotForThread` then `rebuildOrchestrationProjectionSnapshotIndex` and stop."), None);
     assert_eq!(check(&text.replace(". ", ".,_ ")).unwrap().0, "fused_words");
     assert_eq!(check(&text).unwrap().0, "fused_words");
     assert_eq!(check(&format!("```text\n{text}\n```")), None);
@@ -300,6 +304,13 @@ fn missing_spaces_blocks_words_joined_by_punctuation() {
         .collect::<Vec<_>>()
         .join(" ");
     assert_eq!(check(&format!("Please inspect these commits: {hashes}")), None);
+    // Wrapping it in backticks word by word does not hide it either, once
+    // code spans hold half the message.
+    let wrapped = fused.split_whitespace().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(" ");
+    assert_eq!(check(&wrapped).unwrap().0, "missing_spaces");
+    // A few code spans in ordinary prose stay literal.
+    let prose = "Please run `cargo test --locked --all-features --no-fail-fast` and tell me which tests fail. ".repeat(6);
+    assert_eq!(check(&prose), None);
     // Too few words to judge.
     assert_eq!(check("Checked/built/tested,allgreen;merge+deploy/after-review."), None);
     // Text without spaces between words in other scripts is left alone.

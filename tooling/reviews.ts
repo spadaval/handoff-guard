@@ -111,10 +111,14 @@ export function score(finding: Finding | undefined): number | null {
   if (!finding) return null;
   if (finding.score !== undefined) return finding.score;
   if (finding.unknown) return null;
-  const values = (finding.issues ?? []).map(
-    (issue) => SEVERITIES[issue.severity as Severity] ?? 4,
+  const issues = finding.issues ?? [];
+  if (!Array.isArray(issues)) return null;
+  const values = issues.map(
+    (issue) => SEVERITIES[issue?.severity as Severity] as number | undefined,
   );
-  return values.length ? Math.min(...values) : 4;
+  // An issue without a valid severity cannot be graded. It must not read as Clean.
+  if (values.some((v) => v === undefined)) return null;
+  return values.length ? Math.min(...(values as number[])) : 4;
 }
 export function scores(
   review: Partial<Record<Dimension, Finding>>,
@@ -232,6 +236,21 @@ export function sampleReview(
           slice.length === rerate.count,
         "Slice lies outside the fair sample",
       );
+      // One reviewer scoring a message twice under one rubric is not a second
+      // rating, and would be counted as two messages when reviews are compared.
+      const repeat = db.all<{ message_id: string }>(
+        `SELECT r.message_id FROM analysis_records r JOIN analysis_runs a USING(run_id)
+          WHERE a.kind='manual-review' AND r.kind='sample'
+            AND json_extract(a.metadata_json,'$.reviewer')=?
+            AND json_extract(a.metadata_json,'$.rubric_version')=?`,
+        reviewer,
+        RUBRIC_VERSION,
+      );
+      const seen = new Set(repeat.map((r) => r.message_id));
+      invariant(
+        !slice.some((id) => seen.has(id)),
+        `${reviewer} already has a sample of part of this slice under ${RUBRIC_VERSION}`,
+      );
       const byId = new Map(rows.map((r) => [r.message_id, r]));
       for (const id of slice)
         chosen.push({ row: byId.get(id)!, stratum: RERATE });
@@ -261,6 +280,7 @@ export function sampleReview(
       rubric_sha256: checksum(resolve(ROOT, config.rubric)),
       rubric_version: RUBRIC_VERSION,
       reviewer,
+      seed: config.seed,
       mix,
       sample_count: total,
     });
@@ -306,21 +326,32 @@ export function probabilitySample(
   configPath = resolve(ROOT, "config/review.json"),
 ): string[] | null {
   const { seed } = parse<ReviewConfig>(readFileSync(configPath, "utf8"));
-  const sampled = new Map(
-    db
-      .all<{ message_id: string; record_json: string }>(
-        "SELECT r.message_id,r.record_json FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind='sample'",
-      )
-      .map(
-        (r) =>
-          [
-            r.message_id,
-            parse<{ stratum?: string }>(r.record_json).stratum ?? "random",
-          ] as const,
-      )
-      // A second rating draws a message again; its first draw says how it was picked.
-      .filter(([, stratum]) => stratum !== RERATE),
+  const draws = db.all<{
+    message_id: string;
+    record_json: string;
+    metadata_json: string;
+  }>(
+    "SELECT r.message_id,r.record_json,a.metadata_json FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind='sample' ORDER BY a.created_at,a.run_id",
   );
+  // The order below is only the order the samples were drawn in if the seed
+  // is the one they were drawn with. Runs from before the seed was recorded
+  // used the seed that is still in the config.
+  invariant(
+    draws.every((r) => {
+      const drawn = parse<{ seed?: number }>(r.metadata_json).seed;
+      return drawn === undefined || drawn === seed;
+    }),
+    "The sampling seed in the config differs from the one a review run was drawn with",
+  );
+  // A message's first draw says how it was picked. A second rating draws it
+  // again, and so might an imported run; neither changes that.
+  const sampled = new Map<string, string>();
+  for (const r of draws) {
+    const stratum =
+      parse<{ stratum?: string }>(r.record_json).stratum ?? "random";
+    if (stratum !== RERATE && !sampled.has(r.message_id))
+      sampled.set(r.message_id, stratum);
+  }
   const order = db
     .all<{ message_id: string }>(
       "SELECT message_id FROM messages WHERE is_input=1",
@@ -378,6 +409,10 @@ export function recordReview(
     const value = record[key];
     invariant(value && text(value.reason), `${key}: give a reason`);
     invariant(
+      value.issues === undefined || Array.isArray(value.issues),
+      `${key}: issues must be a list`,
+    );
+    invariant(
       value.score === undefined,
       `${key}: remove "score"; it is computed from the severity of each issue`,
     );
@@ -432,14 +467,16 @@ export function recordReview(
       "rewrite is under half the length of the text it replaces; rewrite it in full, or quote the passage you replaced in rewrite.of",
     );
   }
-  db.transaction(() =>
-    put(db, run, "review", record.message_id, record, record.message_id),
-  );
-  return {
+  // Compute before storing: a record that cannot be scored must not be saved.
+  const result = {
     recorded: record.message_id,
     scores: scores(record),
     lowest: lowest(record),
   };
+  db.transaction(() =>
+    put(db, run, "review", record.message_id, record, record.message_id),
+  );
+  return result;
 }
 const DELIMITER = "=".repeat(72);
 /**

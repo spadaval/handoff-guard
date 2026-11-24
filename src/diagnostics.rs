@@ -141,10 +141,19 @@ fn literal(token: &[char]) -> bool {
         && trimmed[trimmed.len() - extension - 1] == '.'
 }
 
-/// Whitespace-separated words of prose, as scalar ranges. Closed fenced blocks,
-/// closed inline code spans and literal tokens are left out. An unclosed fence
-/// or backtick hides nothing, so it cannot be used to skip the checks.
-fn prose_tokens(chars: &[char]) -> Vec<(usize, usize)> {
+/// The words of a message, as scalar ranges, split by where they sit.
+struct Words {
+    /// Whitespace-separated words of prose.
+    prose: Vec<(usize, usize)>,
+    /// Words inside closed inline code spans.
+    code: Vec<(usize, usize)>,
+    /// Code spans hold at least half of the message outside fenced blocks.
+    code_heavy: bool,
+}
+
+/// Closed fenced blocks and literal tokens are left out. An unclosed fence or
+/// backtick hides nothing, so it cannot be used to skip the checks.
+fn words_of(chars: &[char]) -> Words {
     let mut lines: Vec<(usize, usize)> = Vec::new();
     let mut start = 0;
     for (i, c) in chars.iter().enumerate() {
@@ -191,67 +200,73 @@ fn prose_tokens(chars: &[char]) -> Vec<(usize, usize)> {
         }
         n += 1;
     }
-    // Inline code spans are literal, unless they hold most of the message.
-    // A sender told to put identifiers in backticks must not be able to pass
-    // by wrapping its fused prose in them.
-    let collect = |mask_spans: bool| -> (Vec<(usize, usize)>, usize, usize) {
-        let mut tokens = Vec::new();
-        let (mut spanned, mut total) = (0, 0);
-        for (n, &(s, e)) in lines.iter().enumerate() {
-            if code[n] {
+    let mut words = Words {
+        prose: Vec::new(),
+        code: Vec::new(),
+        code_heavy: false,
+    };
+    let (mut spanned, mut total) = (0, 0);
+    for (n, &(s, e)) in lines.iter().enumerate() {
+        if code[n] {
+            continue;
+        }
+        // An inline code span runs from a backtick run to the next run of the
+        // same length on the same line. Spans are not matched across lines, so
+        // one stray backtick cannot hide the text that follows it.
+        let mut masked = vec![false; e - s];
+        let mut i = s;
+        while i < e {
+            if chars[i] != '`' {
+                i += 1;
                 continue;
             }
-            // A span runs from a backtick run to the next run of the same
-            // length on the same line. Spans are not matched across lines, so
-            // one stray backtick cannot hide the text that follows it.
-            let mut masked = vec![false; e - s];
-            let mut i = s;
-            while i < e {
-                if chars[i] != '`' {
-                    i += 1;
-                    continue;
-                }
-                let run = chars[i..e].iter().take_while(|c| **c == '`').count();
-                let mut j = i + run;
-                let mut close = None;
-                while j < e {
-                    if chars[j] == '`' {
-                        let other = chars[j..e].iter().take_while(|c| **c == '`').count();
-                        if other == run {
-                            close = Some(j + run);
-                            break;
-                        }
-                        j += other;
-                    } else {
-                        j += 1;
+            let run = chars[i..e].iter().take_while(|c| **c == '`').count();
+            let mut j = i + run;
+            let mut close = None;
+            while j < e {
+                if chars[j] == '`' {
+                    let other = chars[j..e].iter().take_while(|c| **c == '`').count();
+                    if other == run {
+                        close = Some(j + run);
+                        break;
                     }
-                }
-                if let Some(end) = close {
-                    for flag in &mut masked[i - s..end - s] {
-                        *flag = true;
-                    }
-                    i = end;
+                    j += other;
                 } else {
-                    i += run;
+                    j += 1;
                 }
             }
-            for i in s..e {
-                if !chars[i].is_whitespace() {
-                    total += 1;
-                    spanned += usize::from(masked[i - s]);
+            if let Some(end) = close {
+                for flag in &mut masked[i - s..end - s] {
+                    *flag = true;
                 }
+                i = end;
+            } else {
+                i += run;
             }
-            if !mask_spans {
-                masked.fill(false);
+        }
+        for i in s..e {
+            if !chars[i].is_whitespace() {
+                total += 1;
+                spanned += usize::from(masked[i - s]);
             }
+        }
+        // Prose words stop at a code span; code words stop at its backticks.
+        for in_code in [false, true] {
             let mut token_start = None;
             for i in s..=e {
-                let inside = i < e && !masked[i - s] && !chars[i].is_whitespace();
+                let inside = i < e
+                    && masked[i - s] == in_code
+                    && !chars[i].is_whitespace()
+                    && !(in_code && chars[i] == '`');
                 match (inside, token_start) {
                     (true, None) => token_start = Some(i),
                     (false, Some(t)) => {
                         if !literal(&chars[t..i]) {
-                            tokens.push((t, i));
+                            if in_code {
+                                words.code.push((t, i));
+                            } else {
+                                words.prose.push((t, i));
+                            }
                         }
                         token_start = None;
                     }
@@ -259,13 +274,39 @@ fn prose_tokens(chars: &[char]) -> Vec<(usize, usize)> {
                 }
             }
         }
-        (tokens, spanned, total)
-    };
-    let (tokens, spanned, total) = collect(true);
-    if spanned * 2 > total {
-        return collect(false).0;
     }
-    tokens
+    words.code_heavy = total > 0 && spanned * 2 >= total;
+    words
+}
+
+/// Letter runs of at least `FUSED_RUN_LETTERS` in one word. In code, a run is
+/// cut wherever a lowercase letter meets a capital, so `camelCase` and
+/// `PascalCase` identifiers of any length are not mistaken for fused words.
+fn long_runs(chars: &[char], (start, end): (usize, usize), in_code: bool) -> (Vec<(usize, usize)>, usize) {
+    let mut runs = Vec::new();
+    let mut longest = 0;
+    let mut run_start = None;
+    for i in start..=end {
+        let letter = i < end && chars[i].is_ascii_alphabetic();
+        let hump = in_code
+            && letter
+            && i > start
+            && chars[i].is_ascii_uppercase()
+            && chars[i - 1].is_ascii_lowercase();
+        if let Some(s) = run_start {
+            if !letter || hump {
+                longest = longest.max(i - s);
+                if i - s >= FUSED_RUN_LETTERS {
+                    runs.push((s, i));
+                }
+                run_start = None;
+            }
+        }
+        if letter && run_start.is_none() {
+            run_start = Some(i);
+        }
+    }
+    (runs, longest)
 }
 
 pub struct Check {
@@ -318,28 +359,21 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
     let all_words = words(text);
     let mut result = vec![character_check];
     let chars: Vec<char> = text.chars().collect();
-    let tokens = prose_tokens(&chars);
+    let words = words_of(&chars);
 
-    // Fused words: letter runs longer than any ordinary English word.
+    // Fused words: letter runs longer than any ordinary English word. Wrapping
+    // fused prose in backticks does not hide it, but a real identifier does not
+    // count, because its capitals break it into short runs.
     let mut runs: Vec<(usize, usize)> = Vec::new();
     let mut longest = 0;
-    for &(start, end) in &tokens {
-        let mut run_start = None;
-        for i in start..=end {
-            let letter = i < end && chars[i].is_ascii_alphabetic();
-            match (letter, run_start) {
-                (true, None) => run_start = Some(i),
-                (false, Some(s)) => {
-                    longest = longest.max(i - s);
-                    if i - s >= FUSED_RUN_LETTERS {
-                        runs.push((s, i));
-                    }
-                    run_start = None;
-                }
-                _ => {}
-            }
+    for (list, in_code) in [(&words.prose, false), (&words.code, true)] {
+        for &word in list {
+            let (found, length) = long_runs(&chars, word, in_code);
+            runs.extend(found);
+            longest = longest.max(length);
         }
     }
+    runs.sort_unstable();
     let distinct = runs
         .iter()
         .map(|&(s, e)| chars[s..e].iter().collect::<String>().to_ascii_lowercase())
@@ -364,7 +398,14 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
     // Missing spaces: ordinary prose averages five to seven characters per word.
     // Words with non-ASCII letters may belong to a script that does not use
     // spaces, so they are not measured. Non-ASCII punctuation is fine.
-    let ascii: Vec<(usize, usize)> = tokens
+    // Code spans are literal here unless they hold half the message or more;
+    // a message that is mostly code spans is measured as prose.
+    let mut measured = words.prose.clone();
+    if words.code_heavy {
+        measured.extend(&words.code);
+        measured.sort_unstable();
+    }
+    let ascii: Vec<(usize, usize)> = measured
         .iter()
         .copied()
         .filter(|&(s, e)| !chars[s..e].iter().any(|c| c.is_alphabetic() && !c.is_ascii()))

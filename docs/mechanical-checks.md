@@ -37,8 +37,8 @@ average word. The size limit is 12,000 characters. It was briefly 8,000 on the
 claim that no clean handoff exceeded 6,000; reviewed handoffs judged fine run
 to about 7,800, so that claim was wrong and the limit went back. They
 were not fitted to individual messages. On the fair sample of 86 reviewed handoffs
-the checks block all 18 with a presentation score of 1, 21 of the 40 scored 2,
-and none of the 28 scored 3 or 4. Use the fair sample for such figures: the
+the checks block 14 of the 15 with a presentation score of 1, 25 of the 38
+scored 2, and none of the 33 scored 3 or 4. Use the fair sample for such figures: the
 other reviewed handoffs were picked for being long or fused, which is what the
 checks detect. Those reviews include the heldout split, so there is no
 untouched test set for this version. Freeze a new sample

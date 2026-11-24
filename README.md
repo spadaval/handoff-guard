@@ -47,28 +47,32 @@ A denial names the check, quotes up to three offending stretches from the
 message, says what to change, and repeats the short rules for a good handoff.
 There is no bypass: the sender is expected to rewrite and send again.
 
-A closed inline code span is literal only while code spans hold less than half
-of the message, so wrapping fused prose in backticks does not get it through.
+Backticks do not hide fused prose. Inside a code span a stretch of letters is
+still counted as fused words unless capitals break it up, as they do in
+`camelCase` and `PascalCase` identifiers. And once code spans hold half of the
+message or more, their words count toward the average word length.
 
 ### What the evidence supports
 
-Claude Opus scored 150 handoffs under the rubric. 86 of them are a fair sample
-of the corpus; the other 64 were picked because they were long or fused, so
-they are not counted here. On the fair sample the checks block:
+86 reviewed handoffs form a fair sample of the corpus. Claude Opus scored each
+under the rubric, and the hook is judged against the presentation score, which
+is the only thing it can see. On the fair sample the checks block:
 
 | Reviewer presentation score | Blocked |
 | --- | ---: |
-| 1, cannot be reliably read | 18 of 18 |
-| 2, readable with effort | 21 of 40 |
-| 3 or 4, acceptable | 0 of 28 |
+| 1 Broken, cannot be reliably read | 14 of 15 |
+| 2 Costly, readable with effort | 25 of 38 |
+| 3 Minor or 4 Clean | 0 of 33 |
 
 They block 1,222 of the 3,464 handoff inputs in the corpus (35%).
 
 Read those numbers with their limits:
 
-- **One judge.** Every score is a single pass by one model family. No message
-  was scored twice and there are no human labels, so nobody has measured how
-  repeatable the line between scores 1 and 2 is.
+- **Two model judges, no human one.** Gemini Neon scored 37 of the same
+  handoffs independently. It agreed with Opus on whether a handoff needs work
+  in 35, and never differed by more than one level on presentation. They
+  agreed less well on which handoffs are Broken, not just Costly: 5 of the 8
+  that either called Broken. No person has labelled any of them.
 - **No untouched test set.** The thresholds were set above the tail of 448
   handoffs sent before the shorthand appeared, so blocking none of those is by
   construction. The reviews used to check them include the split that had been
