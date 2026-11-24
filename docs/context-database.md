@@ -99,6 +99,14 @@ rubric hash. `--mix` draws from the strata named in `config/review.json`;
 never drawn again, so runs are disjoint. Reviewers are not told which stratum a
 message came from.
 
+Only part of what gets sampled is a fair sample of the corpus. Every stratum
+draws from one shuffled order of the inputs, so the targeted strata take long
+and fused messages that the `random` draws would otherwise have reached. The
+fair sample is the head of that order up to the last `random` pick, whatever
+stratum each message was drawn under. `probabilitySample()` in
+`tooling/reviews.ts` returns it, and prevalence figures must use it. The
+messages labelled `random` alone understate how many handoffs are bad.
+
 `packet` writes one plain-text file per sampled message: the exact message,
 then trimmed context. Packets hold real message text, so they go under ignored
 `data/` and are deleted after the run.

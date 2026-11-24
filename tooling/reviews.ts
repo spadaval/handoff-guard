@@ -232,6 +232,43 @@ export function sampleReview(
   });
   return { run_id: run, sample_count: total, mix };
 }
+/**
+ * The handoff inputs that form a fair sample of the corpus.
+ *
+ * Every sample is drawn from one shuffled order of the inputs. Targeted strata
+ * take messages from that same order, so the messages labelled `random` are
+ * not a fair sample by themselves: the long and fused ones ahead of them have
+ * already been taken. The fair sample is the whole head of the order, up to
+ * the last `random` pick, whichever stratum each message was drawn under.
+ * Returns null when that head is not fully sampled.
+ */
+export function probabilitySample(
+  db: ResearchDatabase,
+  configPath = resolve(ROOT, "config/review.json"),
+): string[] | null {
+  const { seed } = parse<ReviewConfig>(readFileSync(configPath, "utf8"));
+  const sampled = new Map(
+    db
+      .all<{ message_id: string; record_json: string }>(
+        "SELECT r.message_id,r.record_json FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind='sample'",
+      )
+      .map((r) => [
+        r.message_id,
+        parse<{ stratum?: string }>(r.record_json).stratum ?? "random",
+      ]),
+  );
+  const order = db
+    .all<{ message_id: string }>(
+      "SELECT message_id FROM messages WHERE is_input=1",
+    )
+    .map((r) => r.message_id)
+    .sort((a, b) =>
+      digest(String(seed) + a).localeCompare(digest(String(seed) + b)),
+    );
+  const last = order.findLastIndex((id) => sampled.get(id) === "random");
+  const head = order.slice(0, last + 1);
+  return head.every((id) => sampled.has(id)) ? head : null;
+}
 const text = (v: unknown): v is string => typeof v === "string" && !!v.trim();
 export function recordReview(
   db: ResearchDatabase,

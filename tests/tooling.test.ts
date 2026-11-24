@@ -51,6 +51,7 @@ import {
   sampleReview,
   recordReview,
   writePackets,
+  probabilitySample,
   verdict,
   insertLegacyReview,
   type Review,
@@ -656,6 +657,7 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       () => sampleReview(f.db, "second", 1, "synthetic"),
       /exceeds stratum/,
     );
+    assert.deepEqual(probabilitySample(f.db), [sample.message_id]);
     const low = {
       score: 2,
       reason: "Fused.",
