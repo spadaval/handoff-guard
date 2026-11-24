@@ -3,6 +3,11 @@
   "seed": 20261123,
   "scope": "handoff_inputs",
   "rubric": "docs/communication-rubric.md",
+  "strata": {
+    "pilot": { "legacy_reviewed": true },
+    "fused": { "min_longest_run": 25 },
+    "long": { "min_characters": 5000 }
+  },
   "split_policy": "Use the existing frozen connected-thread split. Never resplit a reviewed corpus.",
   "heldout_modulus": 5,
   "heldout_residue": 0

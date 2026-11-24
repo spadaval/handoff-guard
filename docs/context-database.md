@@ -87,23 +87,27 @@ caps record explicit omission counts. Contexts and bodies remain distinct.
 ## Review without working-file directories
 
 ```sh
-node scripts/handoff.ts review sample my-review --count 30 --reviewer sol
-node scripts/handoff.ts review records my-review sample
-node scripts/handoff.ts review message MESSAGE_ID --context CONTEXT_ID
-node scripts/handoff.ts review record my-review < /dev/stdin
+node scripts/handoff.ts review sample my-review --reviewer claude-opus-5-5 --mix pilot:3,random:6,fused:3,long:3
+node scripts/handoff.ts review packet my-review --out data/review-packets/my-review
+node scripts/handoff.ts review record my-review < review.json
+node scripts/handoff.ts review records my-review review
 ```
 
-`sample` uses `config/review.json` and freezes IDs, split assignments, chosen
-contexts, reviewer and rubric hash. Read each full body and its context, then send
-one manual JSON review to `record` through standard input. The record needs the
-exact `message_id`, frozen `context_id`, `full_message_reviewed: true`, situation
-in `classification.task`, intent in `purpose.reason`, and
-`information_selection`/`presentation` objects with a `score` (1–5 or null) and
-`reason`. Scores below 5 require `issues` with an exact `quote`, `effect` and
-`repair`. Cite only evidence belonging to that context. Use the exact
-anchors and quote/repair requirements in [the rubric](communication-rubric.md).
-Each review is immutable. New manual runs are inspectable through `handoff.ts review`;
-the dashboard's existing contextual pilot remains unchanged.
+`sample` freezes message IDs, split assignments, chosen contexts, reviewer and
+rubric hash. `--mix` draws from the strata named in `config/review.json`;
+`random` is every handoff input. A message already frozen in another sample is
+never drawn again, so runs are disjoint. Reviewers are not told which stratum a
+message came from.
+
+`packet` writes one plain-text file per sampled message: the exact message,
+then trimmed context. Packets hold real message text, so they go under ignored
+`data/` and are deleted after the run.
+
+`record` reads one JSON review from standard input and validates it against
+[the rubric](communication-rubric.md), which defines the record format. It
+rejects quotes that are not exact substrings of the message, unknown issue
+kinds, scores below 4 without an issue, and a presentation score of 1 or 2
+without a rewrite. Each review is immutable.
 
 Signal-specific calibration uses [its own commands](style-signals-calibration.md).
 The abandoned file-oriented review CLIs and working-file archive have been removed.

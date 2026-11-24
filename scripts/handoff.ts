@@ -26,7 +26,12 @@ import {
   frozenCalibration,
   type CalibrationLabel,
 } from "../tooling/analysis.ts";
-import { sampleReview, recordReview, type Review } from "../tooling/reviews.ts";
+import {
+  sampleReview,
+  recordReview,
+  writePackets,
+  type Review,
+} from "../tooling/reviews.ts";
 import { records } from "../tooling/research-store.ts";
 import { compact, exportSnapshot } from "../tooling/maintenance.ts";
 import { hookTest } from "../tooling/hook-test.ts";
@@ -41,7 +46,8 @@ split                      Freeze thread-component tuning/heldout assignments on
 evaluate                   Evaluate every body with the compiled Rust guard.
 mechanics                  Store compiled diagnostics for handoff inputs.
 calibrate prepare|show|label|summarize --run RUN [--split tuning|heldout]
-review sample RUN --reviewer NAME [--count 30]
+review sample RUN --reviewer NAME [--count 30 | --mix pilot:3,random:6]
+review packet RUN --out DIR  Write one reading packet per sampled message (ignored path).
 review record RUN          Read one manual review JSON record from stdin.
 review runs                List saved runs.
 review records RUN KIND [--key KEY]
@@ -67,6 +73,8 @@ export async function main(args = process.argv.slice(2)) {
       config: { type: "string" },
       "baseline-run": { type: "string", default: "pre-style-signals-policy" },
       count: { type: "string", default: "30" },
+      mix: { type: "string" },
+      out: { type: "string" },
       reviewer: { type: "string" },
       key: { type: "string" },
       context: { type: "string" },
@@ -222,7 +230,18 @@ export async function main(args = process.argv.slice(2)) {
             Number(v.count),
             v.reviewer,
             v.config ? resolve(v.config) : undefined,
+            v.mix
+              ? Object.fromEntries(
+                  v.mix.split(",").map((part) => {
+                    const [name, count] = part.split(":");
+                    return [name, Number(count)];
+                  }),
+                )
+              : undefined,
           );
+        } else if (action === "packet") {
+          invariant(run && v.out, "Provide run and --out");
+          result = writePackets(db, run, v.out);
         } else if (action === "record") {
           invariant(run, "Provide run");
           result = recordReview(

@@ -50,6 +50,8 @@ import {
 import {
   sampleReview,
   recordReview,
+  writePackets,
+  verdict,
   insertLegacyReview,
   type Review,
 } from "../tooling/reviews.ts";
@@ -574,17 +576,24 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       "sample",
     )[0];
     const r: Review = {
-      ...sample,
+      message_id: sample.message_id,
+      context_id: sample.context_id,
       full_message_reviewed: true,
-      classification: { task: "An invented task." },
-      purpose: { reason: "Check a fixture." },
-      information_selection: {
-        score: null,
-        reason: "Recipient access is unknown.",
+      exchange: {
+        sender: "coordinator",
+        recipient: "implementer",
+        type: "instruction",
       },
-      presentation: { score: 5, reason: "Ordinary instruction." },
+      situation: "An invented task is underway.",
+      intent: {
+        statement: "Check a fixture.",
+        score: 4,
+        reason: "The ask is the first sentence.",
+      },
+      content: { score: null, reason: "Recipient access is unknown." },
+      presentation: { score: 4, reason: "Ordinary instruction." },
     };
-    recordReview(f.db, "review", r);
+    assert.equal(recordReview(f.db, "review", r).verdict, "send");
     assert.throws(
       () => recordReview(f.db, "review", { ...r, message_id: "unknown" }),
       /outside/,
@@ -595,12 +604,65 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
           ...r,
           presentation: { score: 3, reason: "Needs revision." },
         }),
-      /quoted/,
+      /needs at least one issue/,
+    );
+    const issue = {
+      kind: "fused_words",
+      quote: "not in the message at all",
+      effect: "The reader must split the words.",
+      repair: "Add spaces.",
+    };
+    assert.throws(
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: { score: 3, reason: "Fused.", issues: [issue] },
+        }),
+      /exact substring/,
     );
     assert.throws(
-      () => recordReview(f.db, "review", { ...r, evidence_ids: ["foreign"] }),
-      /another context/,
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: {
+            score: 3,
+            reason: "Wrong list.",
+            issues: [{ ...issue, kind: "no_ask", quote: "" }],
+          },
+        }),
+      /unknown issue kind/,
     );
+    assert.throws(
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: {
+            score: 2,
+            reason: "Fused.",
+            issues: [{ ...issue, quote: data.text.slice(0, 5) }],
+          },
+        }),
+      /rewrite/,
+    );
+    assert.equal(
+      verdict({
+        intent: { score: 4 },
+        content: { score: 1 },
+        presentation: { score: null },
+      }),
+      "rewrite",
+    );
+    assert.throws(
+      () => sampleReview(f.db, "second", 1, "synthetic"),
+      /exceeds stratum/,
+    );
+    assert.throws(
+      () => writePackets(f.db, "review", "packets-in-git"),
+      /ignored/,
+    );
+    const packets = writePackets(f.db, "review", join(f.root, "packets"));
+    assert.equal(packets.files.length, 1);
+    assert.ok(readFileSync(packets.files[0], "utf8").includes(data.text));
     assert.throws(() => sampleReview(f.db, "review", 1, "synthetic"), /frozen/);
     const c = f.db.orm.select().from(t.contexts).get()!;
     f.db.orm
