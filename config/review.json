@@ -4,6 +4,14 @@
   "scope": "handoff_inputs",
   "rubric": "docs/communication-rubric.md",
   "reference_reviewer": "claude-opus-5-5",
+  "rubric_example_messages": [
+    "4e4e665d08e14cc8cac442683635d914e1654ea4c580876eaa634a3e743415c8",
+    "e496cf02479eb3d360120c375de086809d9bcc85865e737734670cc3cfedd814",
+    "49a2498026ec55624913cb7e76f7655a2b32840142c259d0319dea0400dc9df4",
+    "531742f7fc52be55d2ba95a757a9c69fd6417f0af0c98334599d6f8d52daee1e",
+    "4ae78755cdfac5ae228aef4c8aa4cb814cbc0d5f202d8123adfacf757cfd836e",
+    "770fdd6fb0219662c93cdeb6d4dbd9c42735fd29c2c23af2b3a83d9c68cda68f"
+  ],
   "strata": {
     "pilot": { "legacy_reviewed": true },
     "fused": { "min_longest_run": 25 },
