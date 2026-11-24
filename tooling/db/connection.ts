@@ -1,13 +1,15 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { deflateSync, inflateSync } from "node:zlib";
 import { mkdirSync, chmodSync, readFileSync, existsSync } from "node:fs";
-import { dirname, resolve, relative } from "node:path";
+import { dirname, resolve } from "node:path";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import { migrate } from "drizzle-orm/node-sqlite/migrator";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import {
   ROOT,
   DATABASE,
+  withinRepository,
+  isPrivatePath,
   canonical,
   digest,
   invariant,
@@ -36,11 +38,10 @@ export function schemaSignature(raw: DatabaseSync) {
 }
 export function isDataPath(path: string) {
   if (path === ":memory:") return true;
-  const within = relative(ROOT, resolve(path));
+  const within = withinRepository(path);
   return (
-    within.startsWith("..") ||
-    (within.startsWith("data/") && within !== "data/README.md") ||
-    /\.(?:sqlite[^/]*|db(?:-.*)?)$/.test(within)
+    isPrivatePath(path) ||
+    (within !== null && /\.(?:sqlite[^/]*|db(?:-.*)?)$/.test(within))
   );
 }
 export function openDatabase(

@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { resolve, relative, join } from "node:path";
+import { resolve, join } from "node:path";
 import * as t from "./db/schema.ts";
 import type { ResearchDatabase } from "./db/connection.ts";
 import {
@@ -11,6 +11,7 @@ import {
   cut,
   digest,
   invariant,
+  isPrivatePath,
   parse,
   type Data,
 } from "./shared.ts";
@@ -65,6 +66,8 @@ export const ISSUE_KINDS = {
     "disorganised",
   ],
 } as const;
+/** Messages up to this size are rewritten whole. */
+export const WHOLE_REWRITE_CHARACTERS = 1500;
 const ABSENT = new Set(["no_ask", "no_done_condition", "missing_essential"]);
 export type Dimension = keyof typeof ISSUE_KINDS;
 export const DIMENSIONS = Object.keys(ISSUE_KINDS) as Dimension[];
@@ -134,62 +137,64 @@ export function sampleReview(
       reviewer,
     "Provide positive counts and a reviewer",
   );
-  invariant(
-    !db.orm
-      .select()
-      .from(t.analysisRuns)
-      .where(eq(t.analysisRuns.run_id, run))
-      .get(),
-    "Sample already frozen",
-  );
-  const taken = new Set(
-    db
-      .all<{ message_id: string }>(
-        "SELECT r.message_id FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind='sample'",
-      )
-      .map((r) => r.message_id),
-  );
-  const rows = db
-    .all<{
-      message_id: string;
-      split: string;
-      characters: number;
-      legacy: number;
-      longest_run: number | null;
-    }>(
-      `SELECT m.message_id,s.record_json AS split,m.characters,
+  // Reading what is taken and writing the new sample share one write
+  // transaction, so two concurrent runs cannot draw the same message.
+  db.transaction(() => {
+    invariant(
+      !db.orm
+        .select()
+        .from(t.analysisRuns)
+        .where(eq(t.analysisRuns.run_id, run))
+        .get(),
+      "Sample already frozen",
+    );
+    const taken = new Set(
+      db
+        .all<{ message_id: string }>(
+          "SELECT r.message_id FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind='sample'",
+        )
+        .map((r) => r.message_id),
+    );
+    const rows = db
+      .all<{
+        message_id: string;
+        split: string;
+        characters: number;
+        legacy: number;
+        longest_run: number | null;
+      }>(
+        `SELECT m.message_id,s.record_json AS split,m.characters,
         EXISTS(SELECT 1 FROM reviews r WHERE r.message_id=m.message_id) AS legacy,
         (SELECT coalesce(json_extract(c.value,'$.measurements.longest_run'),json_extract(c.value,'$.measurements.longest_prose_run'))
            FROM mechanical_results mr JOIN mechanical_runs r USING(run_id),json_each(mr.result_json,'$.checks') c
           WHERE mr.message_id=m.message_id AND json_extract(c.value,'$.rule') IN ('fused_words','glued_prose')
           ORDER BY r.created_at DESC,r.run_id DESC LIMIT 1) AS longest_run
        FROM messages m JOIN splits s USING(message_id) WHERE m.is_input=1`,
-    )
-    .sort((a, b) =>
-      digest(String(config.seed) + a.message_id).localeCompare(
-        digest(String(config.seed) + b.message_id),
-      ),
-    );
-  const chosen: { row: (typeof rows)[number]; stratum: string }[] = [];
-  for (const [name, count] of Object.entries(mix)) {
-    const stratum = name === "random" ? {} : config.strata?.[name];
-    invariant(stratum, "Unknown stratum: " + name);
-    const pool = rows.filter(
-      (r) =>
-        !taken.has(r.message_id) &&
-        (!stratum.legacy_reviewed || r.legacy) &&
-        (stratum.min_longest_run === undefined ||
-          (r.longest_run ?? 0) >= stratum.min_longest_run) &&
-        (stratum.min_characters === undefined ||
-          r.characters >= stratum.min_characters),
-    );
-    invariant(count <= pool.length, "Sample exceeds stratum: " + name);
-    for (const row of pool.slice(0, count)) {
-      taken.add(row.message_id);
-      chosen.push({ row, stratum: name });
+      )
+      .sort((a, b) =>
+        digest(String(config.seed) + a.message_id).localeCompare(
+          digest(String(config.seed) + b.message_id),
+        ),
+      );
+    const chosen: { row: (typeof rows)[number]; stratum: string }[] = [];
+    for (const [name, count] of Object.entries(mix)) {
+      const stratum = name === "random" ? {} : config.strata?.[name];
+      invariant(stratum, "Unknown stratum: " + name);
+      const pool = rows.filter(
+        (r) =>
+          !taken.has(r.message_id) &&
+          (!stratum.legacy_reviewed || r.legacy) &&
+          (stratum.min_longest_run === undefined ||
+            (r.longest_run ?? 0) >= stratum.min_longest_run) &&
+          (stratum.min_characters === undefined ||
+            r.characters >= stratum.min_characters),
+      );
+      invariant(count <= pool.length, "Sample exceeds stratum: " + name);
+      for (const row of pool.slice(0, count)) {
+        taken.add(row.message_id);
+        chosen.push({ row, stratum: name });
+      }
     }
-  }
-  db.transaction(() => {
     createRun(db, run, "manual-review", {
       config_path: configPath,
       config_sha256: checksum(configPath),
@@ -305,14 +310,24 @@ export function recordReview(
     !low || text(record.rewrite?.text),
     "presentation 1 or 2 needs a plain-English rewrite",
   );
-  invariant(
-    record.rewrite === undefined ||
-      (text(record.rewrite.text) &&
-        (record.rewrite.of === undefined ||
-          (text(record.rewrite.of) &&
-            message.text.includes(record.rewrite.of)))),
-    "rewrite.of must be an exact passage of the message",
-  );
+  if (record.rewrite !== undefined) {
+    const { of, text: rewritten } = record.rewrite;
+    invariant(
+      text(rewritten) &&
+        (of === undefined || (text(of) && message.text.includes(of))),
+      "rewrite.of must be an exact passage of the message",
+    );
+    invariant(
+      of === undefined || message.characters > WHOLE_REWRITE_CHARACTERS,
+      `rewrite the whole message when it is ${WHOLE_REWRITE_CHARACTERS} characters or fewer; omit rewrite.of`,
+    );
+    // A clear version is rarely shorter than what it replaces, so a rewrite
+    // under half that length is a summary, not a rewrite.
+    invariant(
+      chars(rewritten) * 2 >= chars(of ?? message.text),
+      "rewrite is under half the length of the text it replaces; rewrite it in full, or quote the passage you replaced in rewrite.of",
+    );
+  }
   db.transaction(() =>
     put(db, run, "review", record.message_id, record, record.message_id),
   );
@@ -330,9 +345,8 @@ export function writePackets(
   limits = { evidence: 14, characters: 1500 },
 ) {
   directory = resolve(directory);
-  const within = relative(ROOT, directory);
   invariant(
-    within.startsWith("..") || within.startsWith("data/"),
+    isPrivatePath(directory),
     "Packets hold message text; write them outside Git or under ignored data/",
   );
   const samples = records<{ message_id: string; context_id: string | null }>(

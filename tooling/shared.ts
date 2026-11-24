@@ -1,9 +1,24 @@
 import { createHash } from "node:crypto";
 import { readFileSync, openSync, readSync, closeSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { resolve, relative, isAbsolute, sep } from "node:path";
 export const ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const DATABASE = resolve(ROOT, "data/handoffs.sqlite3");
+/** The path relative to the repository, or null when it lies outside it. */
+export function withinRepository(path: string): string | null {
+  const within = relative(ROOT, resolve(path));
+  return within === ".." || within.startsWith(".." + sep) || isAbsolute(within)
+    ? null
+    : within;
+}
+/** True for a place message text may be written: outside Git, or under ignored data/. */
+export function isPrivatePath(path: string) {
+  const within = withinRepository(path);
+  return (
+    within === null ||
+    (within.startsWith("data" + sep) && within !== "data" + sep + "README.md")
+  );
+}
 export const INPUT_KINDS = new Set([
   "assignment",
   "agent_message",

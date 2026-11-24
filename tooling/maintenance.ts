@@ -1,5 +1,5 @@
 import { statSync, createWriteStream, mkdirSync } from "node:fs";
-import { dirname, resolve, relative } from "node:path";
+import { dirname, resolve } from "node:path";
 import { once } from "node:events";
 import { eq, desc } from "drizzle-orm";
 import type { ResearchDatabase } from "./db/connection.ts";
@@ -9,7 +9,7 @@ import {
   canonical,
   parse,
   invariant,
-  ROOT,
+  isPrivatePath,
   chars,
   cut,
   now,
@@ -115,9 +115,8 @@ export async function exportSnapshot(
   textLimit = 1000,
 ) {
   target = resolve(target);
-  const within = relative(ROOT, target);
   invariant(
-    within.startsWith("..") || within.startsWith("data/"),
+    isPrivatePath(target),
     "Message exports must be outside Git or under ignored data/",
   );
   mkdirSync(dirname(target), { recursive: true });

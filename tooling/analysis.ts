@@ -1,6 +1,6 @@
 import { eq, and, asc } from "drizzle-orm";
 import { readFileSync, readdirSync } from "node:fs";
-import { resolve, relative } from "node:path";
+import { resolve } from "node:path";
 import type { ResearchDatabase } from "./db/connection.ts";
 import * as t from "./db/schema.ts";
 import {
@@ -13,6 +13,7 @@ import {
   now,
   count,
   INPUT_KINDS,
+  withinRepository,
   type Data,
 } from "./shared.ts";
 import { validate } from "./dataset.ts";
@@ -480,9 +481,7 @@ export function prepareCalibration(
     "Thread components overlap",
   );
   const metadata = {
-    config_path: relative(ROOT, configPath).startsWith("..")
-      ? configPath
-      : relative(ROOT, configPath),
+    config_path: withinRepository(configPath) ?? configPath,
     config_sha256: checksum(configPath),
     rubric_sha256: checksum(resolve(ROOT, config.rubric)),
     source_sha256: checksum(resolve(ROOT, "src/style_signals.rs")),

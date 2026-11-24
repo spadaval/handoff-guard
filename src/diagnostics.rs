@@ -4,10 +4,14 @@ use std::collections::BTreeMap;
 
 pub const POLICY_VERSION: &str = "plain-english-v2";
 const MAX_SPANS: usize = 128;
-/// No ordinary English word is this long, so a longer letter run is several words fused.
-const FUSED_RUN_LETTERS: usize = 20;
-/// One long run can be an identifier. Two or more is a habit.
+/// Ordinary English words stop at about 20 letters ("internationalization"),
+/// so a longer letter run is several words fused.
+const FUSED_RUN_LETTERS: usize = 21;
+/// One long run can be an identifier or a rare word, even when repeated. Two
+/// different ones is a habit.
 const FUSED_RUNS: usize = 2;
+/// Words this long are highlighted when the average word length blocks.
+const LONG_WORD_CHARACTERS: usize = 20;
 const SPACING_MIN_WORDS: usize = 20;
 const SPACING_MEAN_CHARACTERS: f64 = 9.0;
 const EXAMPLES: usize = 3;
@@ -94,7 +98,27 @@ fn literal(token: &[char]) -> bool {
     if token.windows(2).any(|w| w == [']', '(']) {
         return true;
     }
-    if token.contains(&'_') && token.iter().all(char::is_ascii) {
+    // Strip surrounding punctuation such as a trailing comma or wrapping brackets.
+    let word = |c: &char| c.is_ascii_alphanumeric() || *c == '_';
+    let core = {
+        let from = token.iter().position(word).unwrap_or(token.len());
+        let to = token.iter().rposition(word).map_or(from, |i| i + 1);
+        &token[from..to]
+    };
+    // An identifier: an underscore inside it, and nothing but identifier syntax.
+    if core.len() > 2
+        && core[1..core.len() - 1].contains(&'_')
+        && core.iter().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':' | '(' | ')' | '[' | ']' | '=' | '-' | '/')
+        })
+    {
+        return true;
+    }
+    // A hash or UUID: hex digits and hyphens, with at least one digit.
+    if core.len() >= 7
+        && core.iter().all(|c| c.is_ascii_hexdigit() || *c == '-')
+        && core.iter().any(char::is_ascii_digit)
+    {
         return true;
     }
     // A relative path: has a slash and ends in a file extension.
@@ -130,40 +154,81 @@ fn prose_tokens(chars: &[char]) -> Vec<(usize, usize)> {
         }
     }
     lines.push((start, chars.len()));
-    let fences: Vec<usize> = lines
-        .iter()
-        .enumerate()
-        .filter(|&(_, &(s, e))| {
-            let line = &chars[s..e];
-            let indent = line.iter().take_while(|c| c.is_whitespace()).count();
-            starts_with(&line[indent..], "```") || starts_with(&line[indent..], "~~~")
-        })
-        .map(|(n, _)| n)
-        .collect();
-    let mut code = vec![false; lines.len()];
-    for pair in fences.chunks_exact(2) {
-        for flag in &mut code[pair[0]..=pair[1]] {
-            *flag = true;
+    // A fence closes only on a bare line of the same marker, at least as long.
+    let fence = |n: usize| -> Option<(char, usize, bool)> {
+        let (s, e) = lines[n];
+        let line = &chars[s..e];
+        let indent = line.iter().take_while(|c| c.is_whitespace()).count();
+        let marker = *line.get(indent)?;
+        if marker != '`' && marker != '~' {
+            return None;
         }
+        let length = line[indent..].iter().take_while(|c| **c == marker).count();
+        let bare = line[indent + length..].iter().all(|c| c.is_whitespace());
+        (length >= 3).then_some((marker, length, bare))
+    };
+    let mut code = vec![false; lines.len()];
+    // The shortest opener of each marker known to have no closer below it. A
+    // later opener at least that long cannot close either, so it is not searched.
+    let mut unclosed = [usize::MAX; 2];
+    let mut n = 0;
+    while n < lines.len() {
+        if let Some((marker, length, _)) = fence(n) {
+            let slot = usize::from(marker == '~');
+            if length < unclosed[slot] {
+                let close = (n + 1..lines.len()).find(|&m| {
+                    matches!(fence(m), Some((c, l, true)) if c == marker && l >= length)
+                });
+                if let Some(close) = close {
+                    for flag in &mut code[n..=close] {
+                        *flag = true;
+                    }
+                    n = close + 1;
+                    continue;
+                }
+                unclosed[slot] = length;
+            }
+        }
+        n += 1;
     }
     let mut tokens = Vec::new();
     for (n, &(s, e)) in lines.iter().enumerate() {
         if code[n] {
             continue;
         }
+        // An inline code span runs from a backtick run to the next run of the
+        // same length on the same line. Spans are not matched across lines, so
+        // one stray backtick cannot hide the text that follows it.
         let mut masked = vec![false; e - s];
         let mut i = s;
         while i < e {
-            if chars[i] == '`' {
-                if let Some(close) = (i + 1..e).find(|&j| chars[j] == '`') {
-                    for flag in &mut masked[i - s..=close - s] {
-                        *flag = true;
+            if chars[i] != '`' {
+                i += 1;
+                continue;
+            }
+            let run = chars[i..e].iter().take_while(|c| **c == '`').count();
+            let mut j = i + run;
+            let mut close = None;
+            while j < e {
+                if chars[j] == '`' {
+                    let other = chars[j..e].iter().take_while(|c| **c == '`').count();
+                    if other == run {
+                        close = Some(j + run);
+                        break;
                     }
-                    i = close + 1;
-                    continue;
+                    j += other;
+                } else {
+                    j += 1;
                 }
             }
-            i += 1;
+            if let Some(end) = close {
+                for flag in &mut masked[i - s..end - s] {
+                    *flag = true;
+                }
+                i = end;
+            } else {
+                i += run;
+            }
         }
         let mut token_start = None;
         for i in s..=e {
@@ -255,28 +320,34 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
             }
         }
     }
-    let blocked = runs.len() >= FUSED_RUNS;
+    let distinct = runs
+        .iter()
+        .map(|&(s, e)| chars[s..e].iter().collect::<String>().to_ascii_lowercase())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    let blocked = distinct >= FUSED_RUNS;
     result.push(Check {
         rule: "fused_words",
         decision_rule: "fused_words",
         category: "style",
         blocked,
         reason: format!(
-            "{} stretches of {FUSED_RUN_LETTERS} or more letters have no spaces in them (the longest is {longest} letters), so words are run together",
-            runs.len()
+            "{distinct} different stretches of {FUSED_RUN_LETTERS} or more letters have no spaces in them (the longest is {longest} letters), so words are run together"
         ),
         fix: "Put a space between every word and say the same thing in full sentences. Do not make it terser.",
         examples: excerpts(&chars, &runs),
-        measurements: json!({"long_runs":runs.len(),"longest_run":longest}),
-        thresholds: json!({"run_letters":FUSED_RUN_LETTERS,"minimum_runs":FUSED_RUNS,"operator":">="}),
+        measurements: json!({"long_runs":runs.len(),"distinct_long_runs":distinct,"longest_run":longest}),
+        thresholds: json!({"run_letters":FUSED_RUN_LETTERS,"minimum_distinct_runs":FUSED_RUNS,"operator":">="}),
         spans: runs.iter().map(|&(s, e)| span(s, e)).collect(),
     });
 
     // Missing spaces: ordinary prose averages five to seven characters per word.
+    // Words with non-ASCII letters may belong to a script that does not use
+    // spaces, so they are not measured. Non-ASCII punctuation is fine.
     let ascii: Vec<(usize, usize)> = tokens
         .iter()
         .copied()
-        .filter(|&(s, e)| chars[s..e].iter().all(char::is_ascii))
+        .filter(|&(s, e)| !chars[s..e].iter().any(|c| c.is_alphabetic() && !c.is_ascii()))
         .collect();
     let total: usize = ascii.iter().map(|&(s, e)| e - s).sum();
     let mean = if ascii.is_empty() {
@@ -288,7 +359,7 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
     let mut long_tokens: Vec<(usize, usize)> = ascii
         .iter()
         .copied()
-        .filter(|&(s, e)| e - s >= FUSED_RUN_LETTERS)
+        .filter(|&(s, e)| e - s >= LONG_WORD_CHARACTERS)
         .collect();
     let spans = long_tokens.iter().map(|&(s, e)| span(s, e)).collect();
     long_tokens.sort_by_key(|&(s, e)| (std::cmp::Reverse(e - s), s));

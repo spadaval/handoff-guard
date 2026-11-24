@@ -139,9 +139,11 @@ by the worst passage the recipient has to act on, not by the average.
 ### Show the rewrite
 
 When presentation scores 1 or 2, write the message again in plain English.
-Rewrite the whole message when it is under about 1,500 characters. For a longer
+Rewrite the whole message when it is 1,500 characters or fewer. For a longer
 one, rewrite the passage that carries the main ask, up to about 1,000
-characters, and quote the passage you replaced.
+characters, and quote the passage you replaced. A rewrite is a full version,
+not a summary: the recorder rejects one under half the length of the text it
+replaces.
 
 Splitting fused words, restoring small words, expanding obvious units and
 adding structure such as numbered steps are all part of rewriting. Add no new

@@ -19,28 +19,36 @@ Four checks can block a handoff. Each applies to the whole resolved message.
 
 - **Size.** More than **8,000 characters** is blocked. No clean handoff in the
   corpus exceeds 6,000, and every reviewed one over 8,000 was a record dump.
-- **Fused words.** Two or more stretches of **20 or more letters** with nothing
-  between them. No ordinary English word is that long, so each one is several
-  words run together. One such stretch is allowed, because it can be an
-  identifier.
+- **Fused words.** Two or more different stretches of **21 or more letters**
+  with nothing between them. Ordinary English words stop at about 20 letters,
+  so each one is several words run together. A single stretch is allowed even
+  when it repeats, because it can be an identifier or a rare long word.
 - **Missing spaces.** Words average **9 or more characters** across at least 20
   words. Ordinary prose averages 5 to 7. This catches words joined by slashes,
   commas and plus signs, where no single letter run is long.
 - **Repetition.** One word makes up 80% of 100 or more words, or one line of 20
   or more characters repeats ten times and makes up 80% of the message.
 
-The two spacing checks read prose only. Closed fenced code blocks, closed
-inline code spans, URLs, paths, Markdown links and `snake_case` identifiers are
-left out. An unclosed fence or backtick hides nothing. Words in scripts that do
-not use spaces are not measured.
+The two spacing checks read prose only. They leave out:
+
+- fenced code blocks that close on their own marker, and inline code spans
+  that close on the same line;
+- URLs, Markdown links, and paths that start with `/`, `./`, `../` or `~/` or
+  that contain a slash and end in a file extension;
+- `snake_case` identifiers, and hashes or UUIDs that contain a digit.
+
+Any other literal value belongs in backticks, including a bare directory path
+such as `packages/some-component`. An unclosed fence or a stray backtick hides
+nothing. Words with letters from a script that does not use spaces are not
+measured.
 
 A denial names the check, quotes up to three offending stretches from the
 message, says what to change, and repeats the short rules for a good handoff.
 There is no bypass: the sender is expected to rewrite and send again.
 
 Measured against 150 handoffs scored by Claude Opus under the rubric, these
-checks block 43 of the 44 with the worst presentation score, 34 of the 60 with
-the next-worst, and 1 of the 46 that reviewers found acceptable. They block none of the
+checks block 42 of the 44 with the worst presentation score, 32 of the 60 with
+the next-worst, and none of the 46 that reviewers found acceptable. They block none of the
 448 handoffs sent before the shorthand appeared. Two further detectors,
 punctuation spacing and bracket or plus-sign shorthand, are advisory and never
 block. The checks miss shorthand that keeps its spaces, and they cannot judge

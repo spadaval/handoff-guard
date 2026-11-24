@@ -656,10 +656,34 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       () => sampleReview(f.db, "second", 1, "synthetic"),
       /exceeds stratum/,
     );
+    const low = {
+      score: 2,
+      reason: "Fused.",
+      issues: [{ ...issue, quote: data.text.slice(0, 5) }],
+    };
     assert.throws(
-      () => writePackets(f.db, "review", "packets-in-git"),
-      /ignored/,
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: low,
+          rewrite: { of: data.text.slice(0, 5), text: "Check the sample." },
+        }),
+      /whole message/,
     );
+    assert.throws(
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: low,
+          rewrite: { text: "Check." },
+        }),
+      /half the length/,
+    );
+    for (const path of ["packets-in-git", "..packets-in-git"])
+      assert.throws(
+        () => writePackets(f.db, "review", resolve(ROOT, path)),
+        /ignored/,
+      );
     const packets = writePackets(f.db, "review", join(f.root, "packets"));
     assert.equal(packets.files.length, 1);
     assert.ok(readFileSync(packets.files[0], "utf8").includes(data.text));
@@ -734,7 +758,10 @@ test(
     const f = fixture();
     try {
       const a = body(f, "Review the ordinary invented task."),
-        b = body(f, "collapsedwordsruntogetherhere ".repeat(4)),
+        b = body(
+          f,
+          "collapsedwordsruntogetherhere andanotherstretchwithnospacesinit",
+        ),
         c = body(f, "ordinary ".repeat(1600), 0);
       for (const mid of [a, b, c]) split(f, mid);
       manifest(f, 3);

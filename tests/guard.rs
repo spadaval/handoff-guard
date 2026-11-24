@@ -44,10 +44,19 @@ fn boundaries_unicode_and_pathology() {
         "repetition"
     );
     assert_eq!(
-        check(&"Pleaseinspecttheimplementationandreporttheregression ".repeat(2))
+        check("Pleaseinspecttheimplementationandreporttheregression thenreportwhatyoufoundtothecoordinator")
             .unwrap()
             .0,
         "fused_words"
+    );
+    // A long real word or one identifier may repeat; it is still one stretch.
+    assert_eq!(
+        check("Please check internationalization before release. The internationalization tests must pass."),
+        None
+    );
+    assert_eq!(
+        check(&"Pleaseinspecttheimplementationandreporttheregression ".repeat(2)),
+        None
     );
     // One long run can be an identifier; it takes two to block.
     assert_eq!(
@@ -108,6 +117,12 @@ fn compiled_hook_contract() {
 #[test]
 fn punctuation_in_glued_sentences_does_not_exempt_the_paragraph() {
     let text = "Inspecttheimplementationandverifyallrequiredpublicbehaviors;restoreordinarywordspacingbeforetryingagain. ".repeat(5);
+    // A fence closes only on its own marker, and an underscore or a stray
+    // typographic mark does not turn prose into an identifier.
+    assert_eq!(check(&format!("```\n{text}\n~~~")).unwrap().0, "fused_words");
+    assert_eq!(check(&format!("````\n```\n{text}\n```\n````")), None);
+    assert_eq!(check(&format!("``{}``", text.trim())), None);
+    assert_eq!(check(&text.replace(". ", ".,_ ")).unwrap().0, "fused_words");
     assert_eq!(check(&text).unwrap().0, "fused_words");
     assert_eq!(check(&format!("```text\n{text}\n```")), None);
     // An unclosed fence or backtick hides nothing.
@@ -119,8 +134,8 @@ fn punctuation_in_glued_sentences_does_not_exempt_the_paragraph() {
 #[test]
 fn diagnostic_ranges_are_unicode_scalar_offsets_and_all_checks_are_reported() {
     let text = format!(
-        "界😀\n{}",
-        "Pleaseinspecttheimplementationandreporttheregression ".repeat(6)
+        "界😀\n{}thenreportwhatyoufoundtothecoordinator",
+        "Pleaseinspecttheimplementationandreporttheregression ".repeat(5)
     );
     let report = handoff_guard::inspect(&text);
     assert_eq!(report["offset_unit"], "unicode_scalar");
@@ -129,12 +144,15 @@ fn diagnostic_ranges_are_unicode_scalar_offsets_and_all_checks_are_reported() {
     let glued = &report["checks"][1];
     assert_eq!(glued["status"], "block");
     let chars: Vec<_> = text.chars().collect();
+    assert_eq!(glued["spans"].as_array().unwrap().len(), 6);
     for range in glued["spans"].as_array().unwrap() {
         let start = range["start"].as_u64().unwrap() as usize;
         let end = range["end"].as_u64().unwrap() as usize;
-        assert_eq!(
-            chars[start..end].iter().collect::<String>(),
-            "Pleaseinspecttheimplementationandreporttheregression"
+        let run = chars[start..end].iter().collect::<String>();
+        assert!(
+            run == "Pleaseinspecttheimplementationandreporttheregression"
+                || run == "thenreportwhatyoufoundtothecoordinator",
+            "{run}"
         );
     }
     assert_eq!(
@@ -166,6 +184,13 @@ fn compiled_inspection_and_rule_precedence_match_the_hook() {
     assert!(output.status.success());
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["decision_rule"], "characters");
+    let event = json!({"hook_event_name":"PreToolUse","tool_name":"spawn_agent","tool_input":{"message":text}});
+    assert!(
+        hook(&event)["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("[characters]")
+    );
     let repeated = report["checks"]
         .as_array()
         .unwrap()
@@ -260,6 +285,14 @@ fn missing_spaces_blocks_words_joined_by_punctuation() {
         crates/handoff-guard/src/diagnostics.rs plus some_long_snake_case_identifier_name. "
         .repeat(8);
     assert_eq!(check(&literal), None);
+    // Typographic punctuation does not switch the check off.
+    assert_eq!(check(&fused.replace(' ', "’ ")).unwrap().0, "missing_spaces");
+    // Hashes and UUIDs are literal values.
+    let hashes = (0..20)
+        .map(|n| format!("{n:02}a1b2c3d4e5f60718293a4b5c6d7e8f90123456"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert_eq!(check(&format!("Please inspect these commits: {hashes}")), None);
     // Too few words to judge.
     assert_eq!(check("Checked/built/tested,allgreen;merge+deploy/after-review."), None);
     // Text without spaces between words in other scripts is left alone.
@@ -268,7 +301,7 @@ fn missing_spaces_blocks_words_joined_by_punctuation() {
 
 #[test]
 fn denial_shows_the_offending_text_and_the_rules() {
-    let text = "Pleaseinspecttheimplementationandreporttheregression then stop. ".repeat(3);
+    let text = "Pleaseinspecttheimplementationandreporttheregression then stop. Afterwardsreportwhatyoufoundtothecoordinator. ".repeat(2);
     let event = json!({"hook_event_name":"PreToolUse","tool_name":"spawn_agent","tool_input":{"message":text}});
     let reason = hook(&event)["hookSpecificOutput"]["permissionDecisionReason"]
         .as_str()
