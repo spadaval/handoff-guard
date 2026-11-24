@@ -15,7 +15,7 @@ No global Codex settings or model catalog are activated by this project.
 
 ## Policy
 
-Four checks can block a handoff. Each applies to the whole resolved message.
+Five checks can block a handoff. Each applies to the whole resolved message.
 
 - **Size.** More than **12,000 characters** is blocked. This is a backstop for
   runaway size, not a judgment of quality: reviewed handoffs that are fine to
@@ -27,10 +27,16 @@ Four checks can block a handoff. Each applies to the whole resolved message.
 - **Missing spaces.** Words average **9 or more characters** across at least 20
   words. Ordinary prose averages 5 to 7. This catches words joined by slashes,
   commas and plus signs, where no single letter run is long.
+- **Glued values.** A hash stuck to the word before it, as in
+  `commit4f2a9c1e07`, or three or more different words with a number stuck to
+  the end, as in `supported246`. A glued hash gets copied wrongly, and glued
+  counts are how the shorthand looks once it keeps its spaces. Short names such
+  as `http2`, `base64` and `utf8` do not count, and one or two longer ones such
+  as `python3` are allowed.
 - **Repetition.** One word makes up 80% of 100 or more words, or one line of 20
   or more characters repeats ten times and makes up 80% of the message.
 
-The two spacing checks read prose only. They leave out:
+The three spacing checks read prose only. They leave out:
 
 - fenced code blocks that close on their own marker, and inline code spans
   that close on the same line;
@@ -60,11 +66,15 @@ is the only thing it can see. On the fair sample the checks block:
 
 | Reviewer presentation score | Blocked |
 | --- | ---: |
-| 1 Broken, cannot be reliably read | 14 of 15 |
-| 2 Costly, readable with effort | 25 of 38 |
-| 3 Minor or 4 Clean | 0 of 33 |
+| 1 Broken, cannot be reliably read | 15 of 15 |
+| 2 Costly, readable with effort | 37 of 38 |
+| 3 Minor, a small fix would help | 8 of 14 |
+| 4 Clean | 0 of 19 |
 
-They block 1,222 of the 3,464 handoff inputs in the corpus (35%).
+They block 2,195 of the 3,464 handoff inputs in the corpus (63%). The eight
+Minor handoffs they block each have a hash glued to a word, which is the
+defect reviewers marked. Without the glued-values check the figures are 14 of
+15, 25 of 38, none of 14 and none of 19, and 35% of the corpus.
 
 Read those numbers with their limits:
 
@@ -73,6 +83,10 @@ Read those numbers with their limits:
   in 35, and never differed by more than one level on presentation. They
   agreed less well on which handoffs are Broken, not just Costly: 5 of the 8
   that either called Broken. No person has labelled any of them.
+- **The glued-values check was written from this sample.** It was designed by
+  reading the handoffs the other checks missed, which are the same reviewed
+  handoffs it is scored on here. Its figures are the most likely to shrink on
+  new traffic.
 - **No untouched test set.** The thresholds were set above the tail of 448
   handoffs sent before the shorthand appeared, so blocking none of those is by
   construction. The reviews used to check them include the split that had been
@@ -84,8 +98,8 @@ Read those numbers with their limits:
 - **Detection, not effect.** Nothing here measures what a sender does after a
   block.
 
-The checks miss shorthand that keeps its spaces: short glued runs, dropped
-small words, status chains and unexplained codes. Two further detectors,
+The checks still miss shorthand that keeps its spaces and its numbers apart:
+dropped small words, slash and status chains, and unexplained codes. Two further detectors,
 punctuation spacing and bracket or plus-sign shorthand, are advisory and never
 block. The checks cannot judge whether a message says what it should.
 

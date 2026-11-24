@@ -14,6 +14,13 @@ const FUSED_RUNS: usize = 2;
 const LONG_WORD_CHARACTERS: usize = 20;
 const SPACING_MIN_WORDS: usize = 20;
 const SPACING_MEAN_CHARACTERS: f64 = 9.0;
+/// A word with a number stuck to its end, as in "supported246". One can be a
+/// name such as "python3"; several different ones is a habit.
+const GLUED_NUMBER_WORDS: usize = 3;
+/// Short names such as "http2", "base64" and "utf8" are ordinary, so the word must be longer.
+const GLUED_WORD_LETTERS: usize = 5;
+/// A hash stuck to the word before it, as in "commit4f2a9c1e", will be copied wrongly.
+const GLUED_HASH_CHARACTERS: usize = 7;
 const EXAMPLES: usize = 3;
 const EXAMPLE_CHARACTERS: usize = 60;
 
@@ -437,6 +444,69 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
         measurements: json!({"prose_words":ascii.len(),"mean_word_characters":(mean * 10.0).round() / 10.0}),
         thresholds: json!({"minimum_words":SPACING_MIN_WORDS,"mean_word_characters":SPACING_MEAN_CHARACTERS,"operator":">="}),
         spans: if blocked { spans } else { vec![] },
+    });
+
+    // Glued values: a number or a hash with no space before it. These keep the
+    // average word short and have no long letter runs, so the two checks above
+    // do not see them.
+    let mut glued: Vec<(usize, usize)> = Vec::new();
+    let mut number_words = std::collections::BTreeSet::new();
+    let mut hashes = 0;
+    for &(start, end) in &words.prose {
+        let mut i = start;
+        while i < end {
+            if !chars[i].is_ascii_alphanumeric() {
+                i += 1;
+                continue;
+            }
+            let run_end = (i..end)
+                .find(|&j| !chars[j].is_ascii_alphanumeric())
+                .unwrap_or(end);
+            let run = &chars[i..run_end];
+            let letters = run.iter().take_while(|c| c.is_ascii_alphabetic()).count();
+            // A hash: the run ends in seven or more hex characters with a digit
+            // among them, after a word that is not itself hex.
+            let hex = run
+                .iter()
+                .rev()
+                .take_while(|c| c.is_ascii_digit() || matches!(c, 'a'..='f'))
+                .count();
+            let word = &run[..run.len() - hex];
+            let hash = hex >= GLUED_HASH_CHARACTERS
+                && run[run.len() - hex..].iter().any(char::is_ascii_digit)
+                && word.len() >= 3
+                && word.iter().all(char::is_ascii_alphabetic)
+                && word.iter().any(|c| !c.is_ascii_hexdigit());
+            let number = letters >= GLUED_WORD_LETTERS
+                && letters < run.len()
+                && run[letters].is_ascii_digit();
+            if hash {
+                hashes += 1;
+            } else if number {
+                number_words.insert(run[..letters].iter().collect::<String>().to_ascii_lowercase());
+            }
+            if hash || number {
+                glued.push((i, run_end));
+            }
+            i = run_end;
+        }
+    }
+    let blocked = hashes >= 1 || number_words.len() >= GLUED_NUMBER_WORDS;
+    result.push(Check {
+        rule: "glued_values",
+        decision_rule: "glued_values",
+        category: "style",
+        blocked,
+        reason: format!(
+            "{} hashes and {} different words have a number or hash stuck to them with no space",
+            hashes,
+            number_words.len()
+        ),
+        fix: "Put a space between a word and the number that follows it. Put hashes and identifiers in backticks so they can be copied exactly.",
+        examples: excerpts(&chars, &glued),
+        measurements: json!({"glued_hashes":hashes,"glued_number_words":number_words.len()}),
+        thresholds: json!({"minimum_hashes":1,"minimum_number_words":GLUED_NUMBER_WORDS,"hash_characters":GLUED_HASH_CHARACTERS,"operator":">="}),
+        spans: if blocked { glued.iter().map(|&(s, e)| span(s, e)).collect() } else { vec![] },
     });
 
     let mut counts = BTreeMap::new();

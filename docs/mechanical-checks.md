@@ -44,6 +44,19 @@ checks detect. Those reviews include the heldout split, so there is no
 untouched test set for this version. Freeze a new sample
 before tightening the rules further.
 
-The checks miss compressed text that keeps its spaces: dropped small words,
-status chains and unexplained codes. Those need the instructions and the
-reviews, not a longer rule list.
+## The glued-values check
+
+The spacing checks left one handoff in three with Costly or Broken
+presentation unblocked. Those handoffs keep their spaces, so their average
+word is 8 to 9 characters and no letter run is long. What they share is
+numbers and hashes stuck to words: `supported246`, `exits0`,
+`committed61000c4…`. The check blocks one glued hash, or three different
+words of five or more letters with a number stuck to the end.
+
+It was written by reading those misses, so the reviewed handoffs are not an
+independent test of it. The only evidence from outside that reading is the
+448 early handoffs, none of which it blocks.
+
+The checks still miss dropped small words, slash and status chains, and
+unexplained codes. Those need the instructions and the reviews, not a longer
+rule list.

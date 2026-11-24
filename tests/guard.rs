@@ -150,7 +150,7 @@ fn diagnostic_ranges_are_unicode_scalar_offsets_and_all_checks_are_reported() {
     );
     let report = handoff_guard::inspect(&text);
     assert_eq!(report["offset_unit"], "unicode_scalar");
-    assert_eq!(report["checks"].as_array().unwrap().len(), 7);
+    assert_eq!(report["checks"].as_array().unwrap().len(), 8);
     assert_eq!(report["decision_rule"], check(&text).unwrap().0);
     let glued = &report["checks"][1];
     assert_eq!(glued["status"], "block");
@@ -424,4 +424,40 @@ fn codex_mcp_events_for_t3_code_tools() {
             "{tool} denied"
         );
     }
+}
+
+#[test]
+fn glued_values_blocks_numbers_and_hashes_stuck_to_words() {
+    // Every word is spaced and short, so only the glued values give it away.
+    let numbers = "Author fresh supported246 tests, each ran serial, both exits0 with unchanged233 cases. Please confirm the count.";
+    assert_eq!(check(numbers).unwrap().0, "glued_values");
+    // A hash stuck to the word before it is blocked on its own: it will be copied wrongly.
+    let hash = "Please review the change at commit4f2a9c1e07 and report what you find.";
+    assert_eq!(check(hash).unwrap().0, "glued_values");
+    let reason = hook(&json!({"hook_event_name":"PreToolUse","tool_name":"spawn_agent","tool_input":{"message":hash}}))
+        ["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(reason.contains("“commit4f2a9c1e07”"), "{reason}");
+    assert!(reason.contains("backticks"));
+    // The same content written properly passes.
+    for text in [
+        "Author 246 fresh supported tests. Each ran serially, both exited 0, and 233 cases are unchanged.",
+        "Please review the change at commit `4f2a9c1e07` and report what you find.",
+        "Please review the change at commit 4f2a9c1e07 and report what you find.",
+        "Please review `commit4f2a9c1e07` exactly as named in the tracker.",
+        // Names that end in a number are ordinary, and one or two are fine.
+        "Use python3 with sha256 and base64 over http2, then check utf8 output on arm64.",
+        "The run 4f2a9c1e07ab passed and deadbeef1234 failed; see step1 and round2.",
+        "Read docs/notes-v2.md and build_2026_final, then open ./logs/run20261124.txt.",
+    ] {
+        assert_eq!(check(text), None, "{text}");
+    }
+    let report = handoff_guard::inspect(numbers);
+    let glued = report["checks"].as_array().unwrap().iter().find(|c| c["rule"] == "glued_values").unwrap();
+    assert_eq!(glued["measurements"]["glued_number_words"], 3);
+    let chars: Vec<_> = numbers.chars().collect();
+    let found: Vec<String> = glued["spans"].as_array().unwrap().iter().map(|s| chars[s["start"].as_u64().unwrap() as usize..s["end"].as_u64().unwrap() as usize].iter().collect()).collect();
+    assert_eq!(found, ["supported246", "exits0", "unchanged233"]);
 }
