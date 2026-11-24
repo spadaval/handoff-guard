@@ -28,8 +28,8 @@ fn ordinary_free_form_and_technical_content() {
 
 #[test]
 fn boundaries_unicode_and_pathology() {
-    assert_eq!(check(&"界".repeat(8000)), None);
-    assert_eq!(check(&"界".repeat(8001)).unwrap().0, "characters");
+    assert_eq!(check(&"界".repeat(12000)), None);
+    assert_eq!(check(&"界".repeat(12001)).unwrap().0, "characters");
     // Size is measured in characters only; many short words are fine.
     let words = (0..1900)
         .map(|n| format!("w{}", n % 10))
@@ -76,7 +76,7 @@ fn resolved_tools_only_and_no_mutation() {
         "functions.send_message",
         "mcp__service__followup_task",
     ] {
-        let event = json!({"hook_event_name":"PreToolUse", "tool_name":name,"tool_input":{"message":"A plain sentence of ordinary words. ".repeat(250)}});
+        let event = json!({"hook_event_name":"PreToolUse", "tool_name":name,"tool_input":{"message":"A plain sentence of ordinary words. ".repeat(350)}});
         let before = event.clone();
         assert_eq!(
             hook(&event)["hookSpecificOutput"]["permissionDecision"],
@@ -92,7 +92,7 @@ fn resolved_tools_only_and_no_mutation() {
     );
     assert_eq!(
         hook(
-            &json!({"hook_event_name":"Stop","tool_name":"spawn_agent","tool_input":{"message":"x".repeat(8001)}})
+            &json!({"hook_event_name":"Stop","tool_name":"spawn_agent","tool_input":{"message":"x".repeat(12001)}})
         ),
         json!({})
     );
@@ -102,7 +102,7 @@ fn resolved_tools_only_and_no_mutation() {
 #[test]
 fn compiled_hook_contract() {
     for (input, denied) in [(json!({"hook_event_name":"PreToolUse","tool_name":"spawn_agent","tool_input":{"message":"Review this."}}).to_string(), false),
-        (json!({"hook_event_name":"PreToolUse","tool_name":"followup_task","tool_input":json!({"message":"z".repeat(8001)}).to_string()}).to_string(), true),
+        (json!({"hook_event_name":"PreToolUse","tool_name":"followup_task","tool_input":json!({"message":"z".repeat(12001)}).to_string()}).to_string(), true),
         ("broken json".into(), true)] {
         let mut child = Command::new(env!("CARGO_BIN_EXE_handoff-guard")).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
         child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
@@ -121,7 +121,14 @@ fn punctuation_in_glued_sentences_does_not_exempt_the_paragraph() {
     // typographic mark does not turn prose into an identifier.
     assert_eq!(check(&format!("```\n{text}\n~~~")).unwrap().0, "fused_words");
     assert_eq!(check(&format!("````\n```\n{text}\n```\n````")), None);
-    assert_eq!(check(&format!("``{}``", text.trim())), None);
+    // A code span among prose is literal, but wrapping the message in backticks is not a way out.
+    assert_eq!(
+        check(&format!("{} Run ``{}`` exactly as written.", "Please read the notes first. ".repeat(40), text.trim())),
+        None
+    );
+    assert_eq!(check(&format!("`{}`", text.trim())).unwrap().0, "fused_words");
+    let wrapped = text.split_whitespace().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(" ");
+    assert_eq!(check(&wrapped).unwrap().0, "fused_words");
     assert_eq!(check(&text.replace(". ", ".,_ ")).unwrap().0, "fused_words");
     assert_eq!(check(&text).unwrap().0, "fused_words");
     assert_eq!(check(&format!("```text\n{text}\n```")), None);
@@ -362,7 +369,7 @@ fn t3_delegation_tools_and_every_text_field_are_checked() {
 /// `t3_code` and `tool_input` is the argument object, not a JSON string.
 #[test]
 fn codex_mcp_events_for_t3_code_tools() {
-    let long = "Please read the fixture notes first. ".repeat(250);
+    let long = "Please read the fixture notes first. ".repeat(350);
     let event = |tool: &str, input: serde_json::Value| {
         json!({
             "session_id": "fixture-session",

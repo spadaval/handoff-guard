@@ -191,59 +191,79 @@ fn prose_tokens(chars: &[char]) -> Vec<(usize, usize)> {
         }
         n += 1;
     }
-    let mut tokens = Vec::new();
-    for (n, &(s, e)) in lines.iter().enumerate() {
-        if code[n] {
-            continue;
-        }
-        // An inline code span runs from a backtick run to the next run of the
-        // same length on the same line. Spans are not matched across lines, so
-        // one stray backtick cannot hide the text that follows it.
-        let mut masked = vec![false; e - s];
-        let mut i = s;
-        while i < e {
-            if chars[i] != '`' {
-                i += 1;
+    // Inline code spans are literal, unless they hold most of the message.
+    // A sender told to put identifiers in backticks must not be able to pass
+    // by wrapping its fused prose in them.
+    let collect = |mask_spans: bool| -> (Vec<(usize, usize)>, usize, usize) {
+        let mut tokens = Vec::new();
+        let (mut spanned, mut total) = (0, 0);
+        for (n, &(s, e)) in lines.iter().enumerate() {
+            if code[n] {
                 continue;
             }
-            let run = chars[i..e].iter().take_while(|c| **c == '`').count();
-            let mut j = i + run;
-            let mut close = None;
-            while j < e {
-                if chars[j] == '`' {
-                    let other = chars[j..e].iter().take_while(|c| **c == '`').count();
-                    if other == run {
-                        close = Some(j + run);
-                        break;
+            // A span runs from a backtick run to the next run of the same
+            // length on the same line. Spans are not matched across lines, so
+            // one stray backtick cannot hide the text that follows it.
+            let mut masked = vec![false; e - s];
+            let mut i = s;
+            while i < e {
+                if chars[i] != '`' {
+                    i += 1;
+                    continue;
+                }
+                let run = chars[i..e].iter().take_while(|c| **c == '`').count();
+                let mut j = i + run;
+                let mut close = None;
+                while j < e {
+                    if chars[j] == '`' {
+                        let other = chars[j..e].iter().take_while(|c| **c == '`').count();
+                        if other == run {
+                            close = Some(j + run);
+                            break;
+                        }
+                        j += other;
+                    } else {
+                        j += 1;
                     }
-                    j += other;
+                }
+                if let Some(end) = close {
+                    for flag in &mut masked[i - s..end - s] {
+                        *flag = true;
+                    }
+                    i = end;
                 } else {
-                    j += 1;
+                    i += run;
                 }
             }
-            if let Some(end) = close {
-                for flag in &mut masked[i - s..end - s] {
-                    *flag = true;
+            for i in s..e {
+                if !chars[i].is_whitespace() {
+                    total += 1;
+                    spanned += usize::from(masked[i - s]);
                 }
-                i = end;
-            } else {
-                i += run;
             }
-        }
-        let mut token_start = None;
-        for i in s..=e {
-            let inside = i < e && !masked[i - s] && !chars[i].is_whitespace();
-            match (inside, token_start) {
-                (true, None) => token_start = Some(i),
-                (false, Some(t)) => {
-                    if !literal(&chars[t..i]) {
-                        tokens.push((t, i));
+            if !mask_spans {
+                masked.fill(false);
+            }
+            let mut token_start = None;
+            for i in s..=e {
+                let inside = i < e && !masked[i - s] && !chars[i].is_whitespace();
+                match (inside, token_start) {
+                    (true, None) => token_start = Some(i),
+                    (false, Some(t)) => {
+                        if !literal(&chars[t..i]) {
+                            tokens.push((t, i));
+                        }
+                        token_start = None;
                     }
-                    token_start = None;
+                    _ => {}
                 }
-                _ => {}
             }
         }
+        (tokens, spanned, total)
+    };
+    let (tokens, spanned, total) = collect(true);
+    if spanned * 2 > total {
+        return collect(false).0;
     }
     tokens
 }

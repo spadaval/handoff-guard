@@ -17,7 +17,7 @@ import {
 } from "./shared.ts";
 import { createRun, put, records } from "./research-store.ts";
 import type { Split } from "./analysis.ts";
-export const RUBRIC_VERSION = "handoff-v7";
+export const RUBRIC_VERSION = "handoff-v8";
 export const ROLES = [
   "coordinator",
   "implementer",
@@ -103,7 +103,9 @@ export function verdict(
   );
   if (!scores.length) return "unknown";
   const lowest = Math.min(...scores);
-  return lowest >= 3 ? "send" : lowest === 2 ? "revise" : "rewrite";
+  if (lowest <= 2) return lowest === 2 ? "revise" : "rewrite";
+  // A missing score could have been a 1 or a 2, so the rest cannot clear it.
+  return scores.length === DIMENSIONS.length ? "send" : "unknown";
 }
 interface Stratum {
   legacy_reviewed?: boolean;

@@ -594,7 +594,16 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       content: { score: null, reason: "Recipient access is unknown." },
       presentation: { score: 4, reason: "Ordinary instruction." },
     };
-    assert.equal(recordReview(f.db, "review", r).verdict, "send");
+    // Content is null, so the two 4s cannot clear the message.
+    assert.equal(recordReview(f.db, "review", r).verdict, "unknown");
+    assert.equal(
+      verdict({
+        intent: { score: 4 },
+        content: { score: 3 },
+        presentation: { score: 4 },
+      }),
+      "send",
+    );
     assert.throws(
       () => recordReview(f.db, "review", { ...r, message_id: "unknown" }),
       /outside/,

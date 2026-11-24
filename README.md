@@ -17,8 +17,9 @@ No global Codex settings or model catalog are activated by this project.
 
 Four checks can block a handoff. Each applies to the whole resolved message.
 
-- **Size.** More than **8,000 characters** is blocked. No clean handoff in the
-  corpus exceeds 6,000, and every reviewed one over 8,000 was a record dump.
+- **Size.** More than **12,000 characters** is blocked. This is a backstop for
+  runaway size, not a judgment of quality: reviewed handoffs that are fine to
+  send run to about 7,800 characters.
 - **Fused words.** Two or more different stretches of **21 or more letters**
   with nothing between them. Ordinary English words stop at about 20 letters,
   so each one is several words run together. A single stretch is allowed even
@@ -46,13 +47,43 @@ A denial names the check, quotes up to three offending stretches from the
 message, says what to change, and repeats the short rules for a good handoff.
 There is no bypass: the sender is expected to rewrite and send again.
 
-Measured against 150 handoffs scored by Claude Opus under the rubric, these
-checks block 42 of the 44 with the worst presentation score, 32 of the 60 with
-the next-worst, and none of the 46 that reviewers found acceptable. They block none of the
-448 handoffs sent before the shorthand appeared. Two further detectors,
+A closed inline code span is literal only while code spans hold less than half
+of the message, so wrapping fused prose in backticks does not get it through.
+
+### What the evidence supports
+
+Claude Opus scored 150 handoffs under the rubric. 86 of them are a fair sample
+of the corpus; the other 64 were picked because they were long or fused, so
+they are not counted here. On the fair sample the checks block:
+
+| Reviewer presentation score | Blocked |
+| --- | ---: |
+| 1, cannot be reliably read | 18 of 18 |
+| 2, readable with effort | 21 of 40 |
+| 3 or 4, acceptable | 0 of 28 |
+
+They block 1,222 of the 3,464 handoff inputs in the corpus (35%).
+
+Read those numbers with their limits:
+
+- **One judge.** Every score is a single pass by one model family. No message
+  was scored twice and there are no human labels, so nobody has measured how
+  repeatable the line between scores 1 and 2 is.
+- **No untouched test set.** The thresholds were set above the tail of 448
+  handoffs sent before the shorthand appeared, so blocking none of those is by
+  construction. The reviews used to check them include the split that had been
+  held out. The figures describe this corpus, not future traffic.
+- **A narrow corpus.** 84% of the inputs are from November 2026, 88% from one
+  project, and most from a few long missions. Sender model, project, month and
+  delivery tool change together, so the corpus cannot say which of them causes
+  the shorthand.
+- **Detection, not effect.** Nothing here measures what a sender does after a
+  block.
+
+The checks miss shorthand that keeps its spaces: short glued runs, dropped
+small words, status chains and unexplained codes. Two further detectors,
 punctuation spacing and bracket or plus-sign shorthand, are advisory and never
-block. The checks miss shorthand that keeps its spaces, and they cannot judge
-whether a message says what it should.
+block. The checks cannot judge whether a message says what it should.
 
 ## Build and check
 

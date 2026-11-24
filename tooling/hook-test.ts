@@ -45,7 +45,12 @@ async function scriptedModel(respond: (n: number) => SourceRecord[]) {
       const events = [
         {
           type: "response.created",
-          response: { id, object: "response", status: "in_progress", output: [] },
+          response: {
+            id,
+            object: "response",
+            status: "in_progress",
+            output: [],
+          },
         },
         ...items.flatMap((item, output_index) => [
           { type: "response.output_item.added", output_index, item },
@@ -316,7 +321,7 @@ else if(m.id!==undefined)send({jsonrpc:'2.0',id:m.id,error:{code:-32601,message:
 /** Invented fixture calls. Every argument object is distinct, so each call can be traced. */
 const LONG =
   "Please read the fixture notes before you reply to this request. ".repeat(
-    130,
+    200,
   );
 const MCP_CALLS: { tool: string; args: SourceRecord; denied: boolean }[] = [
   {
@@ -353,7 +358,10 @@ const MCP_CALLS: { tool: string; args: SourceRecord; denied: boolean }[] = [
   },
   {
     tool: "t3_thread_launch",
-    args: { title: "Fixture launch, too long", message: "Launch three. " + LONG },
+    args: {
+      title: "Fixture launch, too long",
+      message: "Launch three. " + LONG,
+    },
     denied: true,
   },
 ];
@@ -369,7 +377,11 @@ const MCP_PATHS = [
     model: "gpt-6.1-sol",
     features: "code_mode = true\ncode_mode_only = true\n",
   },
-  { path: "direct_function", model: "gpt-5.4", features: "code_mode = false\n" },
+  {
+    path: "direct_function",
+    model: "gpt-5.4",
+    features: "code_mode = false\n",
+  },
 ];
 
 /** Function and namespace names the first request offered the model. */
@@ -437,7 +449,10 @@ async function mcpPath(
       hooksConfig(quote(process.execPath) + " " + quote(wrapper)),
     );
     const run = await runCodex(home);
-    invariant(run.code === 0, `Codex MCP fixture (${path}) failed: ` + run.stderr);
+    invariant(
+      run.code === 0,
+      `Codex MCP fixture (${path}) failed: ` + run.stderr,
+    );
     const offered = offeredTools(model.requests[0] ?? {}),
       firstRequest = JSON.stringify(model.requests[0] ?? {});
     if (code)
@@ -489,14 +504,19 @@ async function mcpPath(
         `Unexpected tool_name ${event.tool_name} for ${label}`,
       );
       invariant(
-        typeof event.tool_input === "object" && !Array.isArray(event.tool_input),
+        typeof event.tool_input === "object" &&
+          !Array.isArray(event.tool_input),
         `tool_input is not an object for ${label}`,
       );
-      invariant(reached === !c.denied, `${label} reached the server: ${reached}`);
+      invariant(
+        reached === !c.denied,
+        `${label} reached the server: ${reached}`,
+      );
       invariant(
         c.denied
           ? back.includes(BLOCKED) && back.includes("Handoff Guard blocked")
-          : back.includes("fixture received " + c.tool) && !back.includes(BLOCKED),
+          : back.includes("fixture received " + c.tool) &&
+              !back.includes(BLOCKED),
         `Unexpected result sent back for ${label}: ${back.slice(0, 300)}`,
       );
       return {

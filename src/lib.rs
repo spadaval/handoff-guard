@@ -3,8 +3,10 @@ mod diagnostics;
 mod style_signals;
 pub use diagnostics::inspect;
 
-/// No clean handoff in the corpus is over 6,000 characters; every reviewed one over 8,000 was a record dump.
-pub const MAX_CHARACTERS: usize = 8_000;
+/// A backstop for runaway size. Reviewed handoffs judged fine run to about
+/// 7,800 characters, and none longer has been reviewed as clean prose, so there
+/// is no evidence yet for a tighter limit.
+pub const MAX_CHARACTERS: usize = 12_000;
 
 pub struct Denial {
     pub rule: &'static str,

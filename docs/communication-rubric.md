@@ -1,6 +1,6 @@
 # What a good handoff does
 
-Version: `handoff-v7`.
+Version: `handoff-v8`.
 
 A handoff is any message one agent sends another: an assignment, a question, a
 result or an update.
@@ -12,7 +12,7 @@ that recipient would have to guess.
 
 A review answers three questions in order. Each one depends on the one before.
 
-1. **Intent.** Does the sender know what it wants, and does the message say so?
+1. **Intent.** Does the message say what the sender wants from this recipient?
 2. **Content.** Does the message carry what this recipient needs for that
    intent, and nothing that gets in the way?
 3. **Presentation.** Can the recipient read it in one pass?
@@ -37,8 +37,9 @@ Each question has its own issue kinds, and a kind is only valid under its own
 question.
 
 The **verdict** is derived from the scores and is never judged separately:
-`send` when every score is 3 or 4, `revise` when the lowest is 2, `rewrite`
-when any is 1, and `unknown` when every score is null. One score of 1 is enough
+`rewrite` when any score is 1, `revise` when the lowest is 2, `send` when all
+three are 3 or 4, and `unknown` otherwise. A null score cannot be cleared by
+the other two, so a message with a null and no score below 3 is `unknown`. One score of 1 is enough
 for `rewrite`, even when the other two are 4. Do not raise a score to avoid
 that.
 
@@ -53,7 +54,8 @@ cold read. This applies to all three questions.
 
 Before scoring anything, write the intent down in one sentence: what the sender
 wants this recipient to do, answer, decide or know. If you cannot write that
-sentence, intent fails.
+sentence, intent fails. Judge what the message states. Do not guess at what
+the sender had in mind.
 
 Check that:
 
@@ -135,6 +137,24 @@ The line between 2 and 1 is whether the meaning comes back. Score 2 when every
 clause can be split and read with effort. Score 1 when, after splitting the
 words, something the recipient must act on still cannot be interpreted. Judge
 by the worst passage the recipient has to act on, not by the average.
+
+### Examples at each score
+
+These are fragments of real handoffs with names, numbers and hashes replaced.
+
+| Score | Fragment | Why |
+| --- | --- | --- |
+| **4** | `Please review the parser change and report any failing test by name.` | Ordinary sentence. |
+| **3** | `lifecycle commit after7c1e9d2f0). Status in review round1` | Two glued spots. The reader notices, splits them and loses nothing. |
+| **3** | `All prior native consumer hold rules based only tooling milestones revoked` | Two small words are missing. The sentence still has one reading. |
+| **2** | `Freshreceiptjustreadupdatesstage:` | Every word is fused, but it splits one way: "Fresh receipt just read updates stage". |
+| **2** | `PASS1840 (52.10s, pinned8-15),31focusedPASS` | Counts are glued to words. With effort it reads as 1,840 passing, CPUs 8 to 15 pinned, 31 focused tests passing. |
+| **1** | `Ifstillrunningreportactualcurrentphaseonlyforfairhandoff, no clockETAconsent` | The first half splits. "no clockETAconsent" is an instruction, and after splitting it still has no clear meaning. |
+| **1** | `NewUSER<=20min two300s16CPUbreakerOFF/ONperformancewindowreserved` | The recipient must act on a time window, two trials, a CPU count and a breaker state, and cannot tell which number belongs to which. |
+
+A fragment that would score 2 for effort scores 1 when the unclear part is
+something the recipient has to act on. If you have to write `[unclear: …]` in
+the rewrite for an instruction, a value to copy or a condition, the score is 1.
 
 ### Show the rewrite
 

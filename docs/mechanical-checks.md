@@ -31,13 +31,17 @@ against model reviews.
 - 415 handoffs known to be sent by `gpt-6.1-sol` have a median average word
   length of 12.3 characters.
 
-The thresholds sit above the clean set's tail: 21 letters for a fused run,
-which is one more than "internationalization", 9 characters for the average
-word, and 8,000 characters for size. They
-were not fitted to individual messages. Against Claude Opus reviews the checks
-block nearly every handoff with a presentation score of 1, about half of those
-scored 2, and almost none scored 3 or 4. Those reviews include the heldout
-split, so there is no untouched test set for this version. Freeze a new sample
+The spacing thresholds sit above the clean set's tail: 21 letters for a fused
+run, which is one more than "internationalization", and 9 characters for the
+average word. The size limit is 12,000 characters. It was briefly 8,000 on the
+claim that no clean handoff exceeded 6,000; reviewed handoffs judged fine run
+to about 7,800, so that claim was wrong and the limit went back. They
+were not fitted to individual messages. On the fair sample of 86 reviewed handoffs
+the checks block all 18 with a presentation score of 1, 21 of the 40 scored 2,
+and none of the 28 scored 3 or 4. Use the fair sample for such figures: the
+other reviewed handoffs were picked for being long or fused, which is what the
+checks detect. Those reviews include the heldout split, so there is no
+untouched test set for this version. Freeze a new sample
 before tightening the rules further.
 
 The checks miss compressed text that keeps its spaces: dropped small words,
