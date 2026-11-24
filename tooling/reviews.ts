@@ -16,7 +16,7 @@ import {
 } from "./shared.ts";
 import { createRun, put, records } from "./research-store.ts";
 import type { Split } from "./analysis.ts";
-export const RUBRIC_VERSION = "handoff-v6";
+export const RUBRIC_VERSION = "handoff-v7";
 export const ROLES = [
   "coordinator",
   "implementer",
@@ -24,6 +24,7 @@ export const ROLES = [
   "researcher",
   "tester",
   "human",
+  "system",
   "unknown",
 ] as const;
 export const MESSAGE_TYPES = [
@@ -35,23 +36,31 @@ export const MESSAGE_TYPES = [
 ] as const;
 /** Issue kinds per dimension. Kinds in ABSENT describe missing text and need no quote. */
 export const ISSUE_KINDS = {
-  intent: ["no_ask", "buried_ask", "no_done_condition", "mixed_purposes"],
+  intent: [
+    "no_ask",
+    "buried_ask",
+    "unclear_owner",
+    "no_done_condition",
+    "mixed_purposes",
+  ],
   content: [
     "missing_essential",
     "private_reference",
+    "unexplained_value",
     "unreachable_reference",
     "irrelevant_material",
     "duplication",
+    "restated_source",
     "record_dump",
     "conflicting_instructions",
   ],
   presentation: [
     "fused_words",
+    "broken_literal",
     "dropped_words",
     "symbol_shorthand",
     "coined_abbreviation",
     "status_chain",
-    "false_precision",
     "repetition",
     "disorganised",
   ],
