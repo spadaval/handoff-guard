@@ -1,35 +1,50 @@
 # Handoff Guard
 
-Reject oversized or obviously pathological Codex handoffs with a small Rust
-executable. Ordinary prose, short fragments, Markdown, code, URLs, paths and
-hashes need no template. Denials name the check and ask for a rewrite. The guard
-never truncates or changes delivery arguments.
+Block agent handoffs that are run together, oversized or repeated, and tell the
+sender how to fix them. A small Rust executable runs as a Codex `PreToolUse`
+hook. Ordinary prose, short fragments, Markdown, code, URLs, paths and hashes
+pass without any template. The guard never truncates or changes a message.
 
-The repository contains source, configuration and rubrics. Messages, recovered
-context and all analysis results live in the ignored SQLite database. See
-[the data boundary](data/README.md) and [database commands](docs/context-database.md).
-The local dashboard reads the database directly.
+The hook is one layer. Instructions to the sender come first, and the review
+dashboard shows what still gets through. The repository contains source,
+configuration and the [rubric](docs/communication-rubric.md). Messages,
+recovered context and all analysis results live in the ignored SQLite database.
+See [the data boundary](data/README.md) and [database commands](docs/context-database.md).
 
 No global Codex settings or model catalog are activated by this project.
 
 ## Policy
 
-The limits apply separately to each resolved handoff:
+Four checks can block a handoff. Each applies to the whole resolved message.
 
-- More than **12,000 Unicode scalar values** or **1,500 whitespace-separated
-  words** is denied, regardless of style. Equality passes the size check.
-- Glued prose is denied when ASCII alphabetic runs of at least 40 letters
-  contribute at least 240 letters and 15% of all characters. Fenced code,
-  backtick-bearing tokens, URLs, absolute paths, assignments, email tokens and
-  underscore identifiers have conservative exemptions. These exemptions are
-  heuristics, not a complete programming-language or Markdown parser.
-- Extreme repetition is denied when one token occupies at least 80% of 100 or
-  more words, or a line of at least 20 characters repeats at least ten times and
-  occupies at least 80% of the message.
+- **Size.** More than **8,000 characters** is blocked. No clean handoff in the
+  corpus exceeds 6,000, and every reviewed one over 8,000 was a record dump.
+- **Fused words.** Two or more stretches of **20 or more letters** with nothing
+  between them. No ordinary English word is that long, so each one is several
+  words run together. One such stretch is allowed, because it can be an
+  identifier.
+- **Missing spaces.** Words average **9 or more characters** across at least 20
+  words. Ordinary prose averages 5 to 7. This catches words joined by slashes,
+  commas and plus signs, where no single letter run is long.
+- **Repetition.** One word makes up 80% of 100 or more words, or one line of 20
+  or more characters repeats ten times and makes up 80% of the message.
 
-The style rules intentionally miss less extreme compression and repetition.
-Non-ASCII prose is only subject to size and repetition checks. Code still has
-to fit the size limits and can trigger extreme repetition checks.
+The two spacing checks read prose only. Closed fenced code blocks, closed
+inline code spans, URLs, paths, Markdown links and `snake_case` identifiers are
+left out. An unclosed fence or backtick hides nothing. Words in scripts that do
+not use spaces are not measured.
+
+A denial names the check, quotes up to three offending stretches from the
+message, says what to change, and repeats the short rules for a good handoff.
+There is no bypass: the sender is expected to rewrite and send again.
+
+Measured against 150 handoffs scored by Claude Opus under the rubric, these
+checks block 43 of the 44 with the worst presentation score, 34 of the 60 with
+the next-worst, and 1 of the 46 that reviewers found acceptable. They block none of the
+448 handoffs sent before the shorthand appeared. Two further detectors,
+punctuation spacing and bracket or plus-sign shorthand, are advisory and never
+block. The checks miss shorthand that keeps its spaces, and they cannot judge
+whether a message says what it should.
 
 ## Build and check
 
@@ -62,7 +77,7 @@ the active Codex configuration. Integration fixtures use temporary files and pri
 Build, then copy the executable to a stable absolute path:
 
 ```sh
-install -Dm755 target/release/handoff-guard /root/.local/bin/handoff-guard
+install -Dm755 target/release/handoff-guard ~/.local/bin/handoff-guard
 ```
 
 Adapt [examples/hooks.json](examples/hooks.json) to your installation path.
@@ -77,13 +92,20 @@ For native delegation inside code mode, Codex 0.169.0 needs
 and multi-agent v2. The integration harness sets this only in its temporary
 configuration. Catalog selection and global activation remain separate work.
 
-The matcher catches native concatenated names such as
-`collaborationspawn_agent`, as well as plain and namespaced variants. The guard
-checks resolved `message` strings, JSON-string tool inputs, and legacy text
-`items` joined with newlines. It matches tool names ending in `spawn_agent`,
-`send_message`, or `followup_task`. It does not execute or scan JavaScript to
-infer tool arguments; nested tool dispatch supplies the resolved values.
-Unsupported payload shapes on matching tools receive an explicit denial.
+The guard matches tool names by suffix: `spawn_agent`, `send_message`,
+`send_input` and `followup_task` for Codex's own delegation, and
+`delegate_task`, `t3_thread_send` and `t3_thread_launch` for T3 Code's. That
+covers concatenated names such as `collaborationspawn_agent` and MCP names such
+as `mcp__t3-code__delegate_task`. It reads the `message`, `task` and `prompt`
+strings and any text `items`, and checks them together, so text cannot hide in
+a second field. It does not execute or scan JavaScript to infer arguments;
+nested tool dispatch supplies the resolved values. A matching tool with no text
+is denied, except `t3_thread_launch`, which can start an idle thread.
+
+In the corpus, 87% of handoffs went through the T3 Code tools. The isolated
+integration suite below proves interception for Codex's own delegation tools
+only. Whether Codex fires `PreToolUse` for MCP tools such as
+`mcp__t3-code__delegate_task` has not been tested end to end.
 
 Before relying on a different Codex version, rerun the isolated integration
 suite against it and verify a denial in the client where you activated the

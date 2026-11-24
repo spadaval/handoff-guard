@@ -3,17 +3,47 @@ mod diagnostics;
 mod style_signals;
 pub use diagnostics::inspect;
 
-pub const MAX_CHARACTERS: usize = 12_000;
-pub const MAX_WORDS: usize = 1_500;
+/// No clean handoff in the corpus is over 6,000 characters; every reviewed one over 8,000 was a record dump.
+pub const MAX_CHARACTERS: usize = 8_000;
 
-/// Style checks deliberately avoid interpreting markup, code, or natural language.
-/// Long ASCII alphabetic runs contribute to glued prose; technical tokens are exempt.
-pub fn check(text: &str) -> Option<(&'static str, String)> {
+pub struct Denial {
+    pub rule: &'static str,
+    pub reason: String,
+    pub fix: &'static str,
+    pub examples: Vec<String>,
+}
+
+/// The first blocking check, with what the sender needs to fix it.
+pub fn denial(text: &str) -> Option<Denial> {
     diagnostics::checks(text, false)
         .into_iter()
         .find(|c| c.blocked)
-        .map(|c| (c.decision_rule, c.reason))
+        .map(|c| Denial {
+            rule: c.decision_rule,
+            reason: c.reason,
+            fix: c.fix,
+            examples: c.examples,
+        })
 }
+
+/// The blocking rule and its reason, without any message text.
+pub fn check(text: &str) -> Option<(&'static str, String)> {
+    denial(text).map(|d| (d.rule, d.reason))
+}
+
+/// Tool-name suffixes that carry a handoff, and whether the tool always has text.
+/// Codex concatenates namespaces (`collaborationspawn_agent`), and MCP tools
+/// arrive with a server prefix, so only the suffix is fixed.
+const TOOLS: [(&str, bool); 7] = [
+    ("spawn_agent", true),
+    ("send_message", true),
+    ("followup_task", true),
+    ("send_input", true),
+    ("delegate_task", true),
+    ("t3_thread_send", true),
+    ("t3_thread_launch", false),
+];
+const TEXT_FIELDS: [&str; 3] = ["message", "task", "prompt"];
 
 /// Inspect only resolved delivery arguments. Never scan or execute JavaScript source.
 pub fn hook(event: &Value) -> Value {
@@ -21,14 +51,9 @@ pub fn hook(event: &Value) -> Value {
         return json!({});
     }
     let name = event.get("tool_name").and_then(Value::as_str).unwrap_or("");
-    // Codex 0.169.0 concatenates namespaces (e.g. collaborationspawn_agent).
-    // Match the fixed tool suffix across plain, MCP, and configured namespaces.
-    if !["spawn_agent", "send_message", "followup_task"]
-        .iter()
-        .any(|tool| name.ends_with(tool))
-    {
+    let Some(&(_, text_required)) = TOOLS.iter().find(|(tool, _)| name.ends_with(tool)) else {
         return json!({});
-    }
+    };
     let parsed;
     let input = match event.get("tool_input") {
         Some(Value::String(s)) => {
@@ -38,33 +63,62 @@ pub fn hook(event: &Value) -> Value {
         Some(v) => v,
         None => &Value::Null,
     };
-    // Legacy native spawn accepts text items instead of message. Join all text
-    // items so splitting an oversized handoff into blocks doesn't bypass size policy.
-    let message = if let Some(s) = input.get("message").and_then(Value::as_str) {
-        Some(s.to_owned())
-    } else {
-        input.get("items").and_then(Value::as_array).map(|items| {
+    // Every text field counts, so a short `message` cannot hide a long `items`
+    // list and splitting a handoff into blocks does not get past the size limit.
+    let mut parts: Vec<&str> = TEXT_FIELDS
+        .iter()
+        .filter_map(|key| input.get(key).and_then(Value::as_str))
+        .collect();
+    if let Some(items) = input.get("items").and_then(Value::as_array) {
+        parts.extend(
             items
                 .iter()
                 .filter(|v| v.get("type").and_then(Value::as_str) == Some("text"))
-                .filter_map(|v| v.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
-    };
-    let Some(message) = message else {
-        return deny(
-            "invalid_arguments",
-            "resolved handoff has no message string or text items",
+                .filter_map(|v| v.get("text").and_then(Value::as_str)),
         );
-    };
-    match check(&message) {
-        Some((rule, reason)) => deny(rule, &reason),
+    }
+    if parts.is_empty() {
+        return if text_required {
+            deny(
+                "invalid_arguments",
+                "the handoff has no message, task or prompt text",
+            )
+        } else {
+            json!({})
+        };
+    }
+    match denial(&parts.join("\n")) {
+        Some(d) => decision(format!(
+            "Handoff Guard blocked this message, so nothing was sent. [{}] {}.{} {} {GUIDANCE}",
+            d.rule,
+            d.reason,
+            if d.examples.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " From your message: {}.",
+                    d.examples
+                        .iter()
+                        .map(|e| format!("“{e}”"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            },
+            d.fix,
+        )),
         None => json!({}),
     }
 }
 
-pub fn deny(rule: &str, reason: &str) -> Value {
+const GUIDANCE: &str = "A handoff should say what you want from the recipient first, give it what it needs and cannot look up, and read as plain English: whole words with spaces between them, whole sentences, and paths, commands and identifiers in backticks. Rewrite the message that way and send it again.";
+
+fn decision(reason: String) -> Value {
     json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-        "permissionDecisionReason": format!("Handoff Guard [{rule}]: {reason}. Rewrite the handoff as a shorter, readable message and retry. Nothing was truncated.")}})
+        "permissionDecisionReason": reason}})
+}
+
+pub fn deny(rule: &str, reason: &str) -> Value {
+    decision(format!(
+        "Handoff Guard blocked this message, so nothing was sent. [{rule}] {reason}. {GUIDANCE}"
+    ))
 }

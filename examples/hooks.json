@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": ".*(spawn_agent|send_message|followup_task)$",
+        "matcher": ".*(spawn_agent|send_message|send_input|followup_task|delegate_task|t3_thread_send|t3_thread_launch)$",
         "hooks": [
           {
             "type": "command",

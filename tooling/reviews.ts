@@ -150,9 +150,9 @@ export function sampleReview(
     }>(
       `SELECT m.message_id,s.record_json AS split,m.characters,
         EXISTS(SELECT 1 FROM reviews r WHERE r.message_id=m.message_id) AS legacy,
-        (SELECT json_extract(c.value,'$.measurements.longest_prose_run')
+        (SELECT coalesce(json_extract(c.value,'$.measurements.longest_run'),json_extract(c.value,'$.measurements.longest_prose_run'))
            FROM mechanical_results mr JOIN mechanical_runs r USING(run_id),json_each(mr.result_json,'$.checks') c
-          WHERE mr.message_id=m.message_id AND json_extract(c.value,'$.rule')='glued_prose'
+          WHERE mr.message_id=m.message_id AND json_extract(c.value,'$.rule') IN ('fused_words','glued_prose')
           ORDER BY r.created_at DESC,r.run_id DESC LIMIT 1) AS longest_run
        FROM messages m JOIN splits s USING(message_id) WHERE m.is_input=1`,
     )
@@ -300,7 +300,8 @@ export function recordReview(
     record.rewrite === undefined ||
       (text(record.rewrite.text) &&
         (record.rewrite.of === undefined ||
-          (text(record.rewrite.of) && message.text.includes(record.rewrite.of)))),
+          (text(record.rewrite.of) &&
+            message.text.includes(record.rewrite.of)))),
     "rewrite.of must be an exact passage of the message",
   );
   db.transaction(() =>
@@ -348,13 +349,7 @@ export function writePackets(
         )
       : {};
     // The sender's model is left out so reviewers judge the text, not its author.
-    const facts = [
-      "kind",
-      "tool",
-      "project",
-      "timestamp",
-      "thread_title",
-    ]
+    const facts = ["kind", "tool", "project", "timestamp", "thread_title"]
       .filter((k) => observation[k] != null)
       .map((k) => `${k}: ${String(observation[k])}`);
     const evidence = db.all<{

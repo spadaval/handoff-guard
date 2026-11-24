@@ -159,7 +159,6 @@ export function evaluate(
     label_records_sha256: digest(canonical(labels)),
     split_records_sha256: digest(canonical(split)),
     binary_sha256: checksum(binary),
-    policy: { characters: 12000, words: 1500 },
     groups: {} as Record<
       string,
       {
@@ -208,7 +207,12 @@ export function evaluate(
         const rule = byId.get(r.message_id)!.rule,
           label = labels[r.message_id]?.style_label ?? "unassessed",
           size = ["characters", "words"].includes(rule ?? ""),
-          style = ["glued_prose", "repetition"].includes(rule ?? "");
+          style = [
+            "fused_words",
+            "missing_spaces",
+            "glued_prose",
+            "repetition",
+          ].includes(rule ?? "");
         inc(counts, "bodies");
         inc(counts, rule ? "denied" : "allowed");
         if (rule) inc(counts, "rule:" + rule);

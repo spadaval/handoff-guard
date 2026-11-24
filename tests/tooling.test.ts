@@ -734,7 +734,7 @@ test(
     const f = fixture();
     try {
       const a = body(f, "Review the ordinary invented task."),
-        b = body(f, "collapsedwords".repeat(35)),
+        b = body(f, "collapsedwordsruntogetherhere ".repeat(4)),
         c = body(f, "ordinary ".repeat(1600), 0);
       for (const mid of [a, b, c]) split(f, mid);
       manifest(f, 3);
@@ -952,19 +952,17 @@ test("T3 and history capture recover bounded preceding records without future me
     history.exec(
       "CREATE TABLE thread_items(thread_id TEXT,item_id TEXT,created_at_ms INT,item_type TEXT,item_json TEXT,rollout_ordinal INT)",
     );
-    history
-      .prepare("INSERT INTO thread_items VALUES(?,?,?,?,?,?)")
-      .run(
-        "native",
-        "h1",
-        1000,
-        "mcpToolCall",
-        JSON.stringify({
-          tool: "send_message",
-          arguments: { message: "An invented history message." },
-        }),
-        1,
-      );
+    history.prepare("INSERT INTO thread_items VALUES(?,?,?,?,?,?)").run(
+      "native",
+      "h1",
+      1000,
+      "mcpToolCall",
+      JSON.stringify({
+        tool: "send_message",
+        arguments: { message: "An invented history message." },
+      }),
+      1,
+    );
     history.close();
     exportHistory(c, historyPath, maps.native);
     c.finish();
