@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { connect } from "node:net";
 import { createDashboardApi, wilson } from "../scripts/dashboard-api.ts";
 
 let directory: string, path: string, guard: string, rubric: string;
@@ -279,5 +280,33 @@ test("the API is read-only and rejects bad input without touching SQLite", async
   assert.equal((await get("/messages/" + id(999))).status, 404);
   assert.equal((await get("/nothing")).status, 404);
   assert.equal((await get("/messages?q=" + encodeURIComponent("'; DROP TABLE messages; --"))).body.total, 0);
+  // A wildcard is searched for literally; it is not a message-ID pattern.
+  for (const q of ["%25", "_"]) assert.equal((await get("/messages?q=" + q)).body.total, 0, q);
+  assert.equal((await get("/messages?q=" + id(4))).body.total, 1);
+  assert.equal((await fetch(base + "/messages/%E0%A4%A")).status, 400);
   assert.equal(createHash("sha256").update(readFileSync(path)).digest("hex"), before);
+});
+
+test("a malformed request line gets a 400 and the server keeps answering", async () => {
+  const port = (server.address() as any).port;
+  const reply = await new Promise<string>((done, fail) => {
+    const socket = connect(port, "127.0.0.1", () =>
+      socket.write("GET //[ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"),
+    );
+    let data = "";
+    socket.on("data", (d) => (data += d));
+    socket.on("end", () => done(data));
+    socket.on("error", fail);
+  });
+  assert.match(reply, /^HTTP\/1\.1 400/);
+  assert.equal((await get("/meta")).status, 200);
+});
+
+test("a hook binary that exits without reading falls back to the stored report", async () => {
+  api.close();
+  api = createDashboardApi({ database: path, guard: "/bin/true", rubric });
+  const m = (await api.detail(id(1)))!;
+  assert.equal(m.hook.live, null);
+  assert.ok(m.hook.live_error);
+  assert.ok(m.hook.stored);
 });

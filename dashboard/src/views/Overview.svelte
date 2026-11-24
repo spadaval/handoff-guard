@@ -32,8 +32,11 @@
   const bad = $derived.by(() => {
     if (!ov) return null;
     if (criterion === "verdict") {
+      // Reviews whose scores are all null have no verdict and are left out,
+      // as they are in the breakdowns and the hook comparison.
       const k = (ov.verdicts.revise?.k ?? 0) + (ov.verdicts.rewrite?.k ?? 0);
-      return { k, n: ov.reviewed, ...interval(k, ov.reviewed) };
+      const N = k + (ov.verdicts.send?.k ?? 0);
+      return { k, n: N, ...interval(k, N) };
     }
     const d = ov.dimensions.presentation;
     const k = (d["1"] ?? 0) + (d["2"] ?? 0);
@@ -99,7 +102,9 @@
     <section class="section lead">
       <div class="verdict">
         <h2>Reviewer verdicts</h2>
-        {#if bad}
+        {#if bad && !bad.n}
+          <p class="hero-line">No reviewed input in this sample has a score for {criterionLabel}, so there is no rate to show.</p>
+        {:else if bad}
           <p class="hero num">{pct(bad.p)}</p>
           <p class="hero-line">
             of reviewed {STRATUM_NAMES[sample]?.toLowerCase()}-sample inputs are bad by {criterionLabel}:

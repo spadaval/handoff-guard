@@ -252,6 +252,9 @@ export function inspect(
         done({ report: null, error: e instanceof Error ? e.message : String(e) });
       }
     });
+    // A binary that exits without reading closes the pipe. The close handler
+    // above reports that; without this listener the EPIPE would crash Node.
+    child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify({ message_id, text }) + "\n");
   });
 }
@@ -382,9 +385,10 @@ export function createDashboardApi(options: DashboardApiOptions) {
     let hookRun: Index["hookRun"] = null;
     if (has("mechanical_results")) {
       for (const r of d.all<{ message_id: string; result_json: string }>(
-        `SELECT message_id,result_json FROM (
-           SELECT mr.message_id,mr.result_json,row_number() OVER (PARTITION BY mr.message_id ORDER BY r.created_at DESC,r.run_id DESC) AS rank
-           FROM mechanical_results mr JOIN mechanical_runs r USING(run_id)) WHERE rank=1`,
+        // Only the newest run counts. Mixing in older runs would report results
+        // from rules the current binary no longer has.
+        `SELECT message_id,result_json FROM mechanical_results
+          WHERE run_id=(SELECT run_id FROM mechanical_runs ORDER BY created_at DESC,run_id DESC LIMIT 1)`,
       )) {
         const input = byId.get(r.message_id);
         const report = decode<HookReport>(r.result_json);
@@ -763,7 +767,9 @@ export function createDashboardApi(options: DashboardApiOptions) {
         "SELECT message_id,instr(lower(text),lower(?)) AS at FROM messages WHERE is_input=1 AND (instr(lower(text),lower(?))>0 OR message_id LIKE ?)",
         query,
         query,
-        query.toLowerCase().replace(/[%_]/g, "") + "%",
+        // Only a hexadecimal query can be the start of a message ID. Anything
+        // else gets NULL, which LIKE never matches.
+        /^[0-9a-f]{4,64}$/i.test(query) ? query.toLowerCase() + "%" : null,
       );
       const hits = new Set(rows.map((r) => r.message_id));
       pool = pool.filter((i) => hits.has(i.id));
@@ -946,7 +952,7 @@ export function createDashboardApi(options: DashboardApiOptions) {
       : [];
     const stored = has("mechanical_results")
       ? d.get<any>(
-          "SELECT mr.result_json,r.run_id,r.created_at FROM mechanical_results mr JOIN mechanical_runs r USING(run_id) WHERE mr.message_id=? ORDER BY r.created_at DESC,r.run_id DESC LIMIT 1",
+          "SELECT mr.result_json,r.run_id,r.created_at FROM mechanical_results mr JOIN mechanical_runs r USING(run_id) WHERE mr.message_id=? AND r.run_id=(SELECT run_id FROM mechanical_runs ORDER BY created_at DESC,run_id DESC LIMIT 1)",
           id,
         )
       : undefined;
@@ -995,7 +1001,14 @@ export function createDashboardApi(options: DashboardApiOptions) {
   }
 
   async function middleware(req: IncomingMessage, res: ServerResponse, next: () => void) {
-    const url = new URL(req.url || "/", "http://localhost");
+    let url: URL;
+    try {
+      url = new URL(req.url || "/", "http://localhost");
+    } catch {
+      res.statusCode = 400;
+      res.end("Malformed request URL.");
+      return;
+    }
     if (url.pathname !== PREFIX && !url.pathname.startsWith(PREFIX + "/")) return next();
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
@@ -1019,7 +1032,8 @@ export function createDashboardApi(options: DashboardApiOptions) {
       }
       send(404, { error: "Unknown endpoint." });
     } catch (e) {
-      if (e instanceof RangeError) return send(400, { error: e.message });
+      if (e instanceof RangeError || e instanceof URIError)
+        return send(400, { error: e.message });
       console.error("Dashboard API:", e);
       send(503, {
         error: "The review database could not be read. Check that data/handoffs.sqlite3 exists, then retry.",

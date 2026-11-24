@@ -9,7 +9,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname, join, resolve } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { createDashboardApi } from "../scripts/dashboard-api.ts";
 
 const here = import.meta.dirname;
@@ -54,7 +54,8 @@ function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const dist = join(here, "dist");
   const path = decodeURIComponent(new URL(req.url || "/", "http://x").pathname);
   let file = resolve(dist, "." + path);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory())
+  // The separator matters: a bare prefix test would also accept "dist-old/".
+  if (!file.startsWith(dist + sep) || !existsSync(file) || statSync(file).isDirectory())
     file = join(dist, "index.html");
   res.setHeader("Content-Type", types[extname(file)] ?? "application/octet-stream");
   if (file.includes("/assets/")) res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
@@ -85,10 +86,21 @@ server.on("request", (req, res) => {
     res.end("This dashboard does not answer for that host name. Add it to ALLOWED_HOSTS.");
     return;
   }
-  api.middleware(req, res, () => app(req, res, () => {
-    res.statusCode = 404;
-    res.end();
-  }));
+  // A request that throws, such as one with a malformed URL or bad percent
+  // escape, gets a 400. It must not take the server down.
+  Promise.resolve()
+    .then(() =>
+      api.middleware(req, res, () =>
+        app(req, res, () => {
+          res.statusCode = 404;
+          res.end();
+        }),
+      ),
+    )
+    .catch(() => {
+      if (!res.headersSent) res.statusCode = 400;
+      res.end();
+    });
 });
 server.listen(port, host, () => {
   const shown = host.includes(":") ? `[${host}]` : host;

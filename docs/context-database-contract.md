@@ -17,8 +17,8 @@ What it relies on:
   `kind='sample'` gives `stratum`, `split` and `context_id`; `kind='review'`
   holds the review record defined in `docs/communication-rubric.md`. Run
   metadata supplies `reviewer` and `rubric_version`.
-- `mechanical_results` joined to `mechanical_runs`: the newest report per
-  input. Reports are rendered from their `checks` array without assuming rule
+- `mechanical_results` joined to `mechanical_runs`: the reports of the newest
+  run only. Reports are rendered from their `checks` array without assuming rule
   names. Span offsets are Unicode scalar offsets.
 - `reviews` with `intentionality-v2` only, as an older comparison.
 - `contexts`, `evidence`, `context_evidence` and `context_references` for the

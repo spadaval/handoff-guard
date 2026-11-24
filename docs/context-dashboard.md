@@ -19,8 +19,8 @@ environment variables.
   `rewrite`, or, with the other setting, when its presentation score is 1 or 2.
   The verdict is computed with `verdict()` from `tooling/reviews.ts`.
 - **Intervals.** Every share is shown as `k/n` with a 95% Wilson interval.
-- **Hook.** Lists and aggregates use the newest stored report per input in
-  `mechanical_results`. "Blocks" means the report's `blocked` is true; "warns"
+- **Hook.** Lists and aggregates use the reports of the newest run in
+  `mechanical_results`. An input that run did not cover shows as not assessed. "Blocks" means the report's `blocked` is true; "warns"
   means it is not blocked but a check has a status other than `pass`. Warnings
   do not stop delivery, so a warned bad input counts as a miss.
 - **Months.** An input's month is the month of its earliest recorded
