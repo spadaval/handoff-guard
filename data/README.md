@@ -38,3 +38,7 @@ See [database operations](../docs/context-database.md).
 No real messages, excerpts, derived labels, charts, reports or aggregate results
 belong in Git. Backend test fixtures are invented. Do not copy historical text
 into a regression fixture without replacing it with a synthetic example.
+
+The one exception is the rubric. It may quote short fragments of real handoffs
+as examples after names, identifiers, hashes and anything else sensitive have
+been replaced.

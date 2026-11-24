@@ -11,7 +11,10 @@ particular headings, or an Atelier-specific task line.
   files. Keep messages and everything derived from them in the ignored SQLite
   database: context, labels, scores, samples, diagnostics and reports, including
   aggregates. Do not add loose durable data exports or experiment directories.
-- Never commit real corpus text or copy it into fixtures. Use invented examples.
+- Do not commit real corpus messages or copy them into fixtures. Use invented
+  text there. The rubric may quote short fragments of real handoffs as
+  examples, once names, identifiers, hashes and anything else sensitive have
+  been replaced.
 - Use TypeScript and the shared Drizzle database layer for research tooling. The installed
   hook should not require Python or another separately installed interpreter.
 - Test the compiled executable and its actual Codex hook integration before
