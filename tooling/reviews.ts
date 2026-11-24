@@ -347,15 +347,13 @@ export function writePackets(
           )!.record_json,
         )
       : {};
+    // The sender's model is left out so reviewers judge the text, not its author.
     const facts = [
       "kind",
       "tool",
       "project",
       "timestamp",
       "thread_title",
-      "role",
-      "model",
-      "saved_model_selection",
     ]
       .filter((k) => observation[k] != null)
       .map((k) => `${k}: ${String(observation[k])}`);
