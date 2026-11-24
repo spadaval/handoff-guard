@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run_case(binary, scenario='normal'):
-    (ROOT / 'data/private').mkdir(mode=0o700, parents=True, exist_ok=True)
+    (ROOT / 'data').mkdir(mode=0o700, parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='handoff-hook-') as temp:
         home = Path(temp)
         audit = home / 'hook-events.jsonl'
@@ -89,8 +89,14 @@ hooks = true
         target = [e for e in events if any(e['tool_name'].endswith(t) for t in ['spawn_agent','send_message','followup_task'])]
         summary = {'scenario':scenario,'codex_exit':result.returncode,'requests':len(requests),'intercepted':[{'tool':e['tool_name'],'characters':len(e['tool_input'].get('message',''))} for e in target], 'stdout':result.stdout,'stderr':result.stderr}
         # Keep integration traces local; no corpus text is involved.
-        dest = ROOT / 'data/private' / f'integration-{scenario}.json'
-        dest.write_text(json.dumps({'summary':summary,'events':events,'requests':requests},indent=2)); dest.chmod(0o600)
+        import context_database as corpus
+        import research_store as store
+        db = corpus.connect(store.DATABASE)
+        run_id = 'hook-integration-'+scenario+'-'+corpus.now()
+        with db:
+            store.create_run(db,run_id,'hook-integration',{'scenario':scenario,'binary_sha256':corpus.checksum(binary)})
+            store.put(db,run_id,'trace','session',{'summary':summary,'events':events,'requests':requests})
+        db.close()
         outputs = [x for req in requests for x in req.get('input', []) if x['type'].endswith('call_output')]
         output_text = json.dumps(outputs)
         assert result.returncode == 0, summary
@@ -113,7 +119,10 @@ hooks = true
         concise = {k:v for k,v in summary.items() if k not in ['stdout','stderr']}
         concise['assertions_passed'] = True
         concise['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
-        (ROOT/'data/private'/f'integration-{scenario}-summary.json').write_text(json.dumps(concise,indent=2)+'\n')
+        db = corpus.connect(store.DATABASE)
+        with db:
+            store.put(db,run_id,'report','summary',concise)
+        db.close()
         print(json.dumps(concise,indent=2))
         return summary
 

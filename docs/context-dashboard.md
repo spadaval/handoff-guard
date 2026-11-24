@@ -1,7 +1,7 @@
 # Review a message in its strategic and tactical context
 
 Open the [handoff review dashboard](http://ai-assistant-ia:5173/artifacts/handoff-context-review/).
-It reads `data/private/handoffs.sqlite3` through the existing Artifact Hub server.
+It reads `data/handoffs.sqlite3` through the existing Artifact Hub server.
 There is no corpus download, JSON publication step, second service or extra port.
 
 The left message list selects the message. There is no right sidebar. The main
@@ -84,7 +84,7 @@ import and register the plugin before artifact routing:
 import { handoffReviewApi } from '/root/handoff-guard/scripts/dashboard-api.ts';
 
 // Inside plugins:
-handoffReviewApi('/root/handoff-guard/data/private/handoffs.sqlite3'),
+handoffReviewApi('/root/handoff-guard/data/handoffs.sqlite3'),
 ```
 
 Adjust repository paths on another installation. Vite reloads its configuration;

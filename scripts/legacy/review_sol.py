@@ -223,6 +223,7 @@ def finalize(public_report=None):
 
 
 if __name__=='__main__':
+    raise SystemExit('Historical file workflow retired. Use scripts/research.py and scripts/calibrate_style_signals.py with SQLite.')
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='action',required=True)
     prep=sub.add_parser('prepare');prep.add_argument('--batches',type=int,default=24);prep.add_argument('--sample-size',type=int,default=100);prep.add_argument('--seed',type=int,default=20261123)
     page=sub.add_parser('page');page.add_argument('batch',type=int);page.add_argument('page',type=int)

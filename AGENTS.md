@@ -7,8 +7,11 @@ particular headings, or an Atelier-specific task line.
 - Prefer a few understandable deterministic rules over a growing exception list.
 - Measure false positives and misses against historical messages. Keep style
   labels separate from size policy, and keep ambiguous examples ambiguous.
-- Raw corpus files in `data/private/` are local-only. Never commit them or copy
-  their contents into public fixtures without sanitizing the examples.
+- Keep code, configuration, rubrics and review instructions as ordinary tracked
+  files. Keep messages and everything derived from them in the ignored SQLite
+  database: context, labels, scores, samples, diagnostics and reports, including
+  aggregates. Do not add loose durable data exports or experiment directories.
+- Never commit real corpus text or copy it into fixtures. Use invented examples.
 - Corpus preparation scripts may use Python's standard library. The installed
   hook should not require Python or another separately installed interpreter.
 - Test the compiled executable and its actual Codex hook integration before
@@ -43,6 +46,6 @@ and synchronize the served copy when iterating. See `dashboard/README.md`.
 - Do not add automated UI tests or browser assertion suites. Judge readability
   and usability by viewing and using the rendered page. Compiler diagnostics
   are separate from visual review. Backend and Rust checks remain appropriate.
-- Keep SQLite databases, their sidecars, raw corpus text, review labels and
-  screenshots containing real messages out of Git. Commit only source,
-  sanitized examples and aggregate analysis reports.
+- Keep SQLite databases and their automatic WAL/SHM files out of Git. Do not
+  commit message-derived reports, charts, labels or screenshots, even aggregates.
+  Temporary exports must be explicit and disposable; SQLite is authoritative.

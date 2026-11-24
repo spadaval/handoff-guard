@@ -1,39 +1,29 @@
 #!/usr/bin/env python3
 """Evaluate every recovered body with the compiled guard; keep raw results private.
 
-prepare freezes connected-thread splits BEFORE tuning. No automatic style labels
-are ground truth. Manual labels live separately and survive corpus regeneration.
+prepare freezes connected-thread splits BEFORE tuning. Labels, splits and
+predictions live in SQLite. No automatic style labels are ground truth.
 """
 import argparse
 import collections
 import hashlib
 import json
-import os
 from pathlib import Path
-import subprocess
+
+import context_database as corpus
+import research_store as store
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIVATE = ROOT / 'data/private'
 WORKER = {'worker_assistant_output', 'worker_commentary', 'worker_final_answer', 'worker_report', 'cached_worker_report', 'completion_notification'}
 INPUTS = {'assignment', 'agent_message', 'followup_assignment', 'cached_agent_message', 'agent_delivery'}
 
 
-def read(name):
-    return [json.loads(line) for line in (PRIVATE / name).open()]
-
-
-def write_private(name, rows):
-    path = PRIVATE / name
-    with path.open('w') as out:
-        os.chmod(path, 0o600)
-        for row in rows:
-            out.write(json.dumps(row, ensure_ascii=False) + '\n')
-
-
-def prepare():
-    if (PRIVATE / 'split.jsonl').exists():
-        raise SystemExit('split.jsonl already exists; refusing to change a reserved set')
-    messages, observations = read('messages.jsonl'), read('observations.jsonl')
+def prepare(db):
+    if db.execute('SELECT 1 FROM splits LIMIT 1').fetchone():
+        raise ValueError('Reserved split already exists; refusing to change it')
+    config = json.loads((ROOT/'config/review.json').read_text())
+    messages = [dict(r) for r in db.execute('SELECT message_id FROM messages')]
+    observations = [json.loads(r[0]) for r in db.execute('SELECT record_json FROM observations')]
     parent = {}
     def root(x):
         parent.setdefault(x, x)
@@ -62,33 +52,38 @@ def prepare():
         mid = message['message_id']
         component = identities[root(first[mid])] if mid in first else mid
         rows.append({'message_id': mid, 'component': component,
-                     'split': 'heldout' if int(component[:8], 16) % 5 == 0 else 'tuning'})
-    write_private('split.jsonl', rows)
-    print(json.dumps({'bodies': dict(collections.Counter(r['split'] for r in rows)),
-                      'thread_components': len(groups), 'threads': len(parent)}, indent=2))
+                     'split': 'heldout' if int(component[:8], 16) % config['heldout_modulus'] == config['heldout_residue'] else 'tuning'})
+    with db:
+        db.executemany('INSERT INTO splits VALUES(?,?)',[(r['message_id'],corpus.js(r)) for r in rows])
+    return {'bodies':dict(collections.Counter(r['split'] for r in rows)),'thread_components':len(groups),'threads':len(parent)}
 
 
-def evaluate(binary, output):
-    manifest = json.loads((PRIVATE / 'manifest.json').read_text())
-    for name in ['messages.jsonl', 'observations.jsonl']:
-        assert hashlib.sha256((PRIVATE / name).read_bytes()).hexdigest() == manifest['files'][name]['sha256'], 'Corpus checksum mismatch'
-    messages = read('messages.jsonl')
-    split = {r['message_id']: r['split'] for r in read('split.jsonl')}
-    labels = {r['message_id']: r for r in read('labels.jsonl')} if (PRIVATE / 'labels.jsonl').exists() else {}
+def evaluate(db, binary, label_source):
+    corpus.validate(db)
+    messages = [{**dict(r),'kinds':json.loads(r['kinds'])} for r in db.execute('SELECT * FROM messages ORDER BY message_id')]
+    split = {r['message_id']:json.loads(r['record_json'])['split'] for r in db.execute('SELECT * FROM splits')}
+    labels = {}
+    for row in db.execute('SELECT source_path,record_json FROM historical_reviews ORDER BY id'):
+        if row['source_path'].endswith('/'+label_source):
+            value = json.loads(row['record_json'])
+            labels[value['message_id']] = value
+    if label_source != 'none' and not labels:
+        raise ValueError('No labels for requested source')
     message_ids = {r['message_id'] for r in messages}
     assert split.keys() == message_ids, 'Reserved split does not match this corpus'
     assert labels.keys() <= message_ids, 'Labels reference unknown bodies'
     assert all(r['style_label'] in {'normal', 'pathological', 'ambiguous'} for r in labels.values()), 'Unknown style label'
-    with (PRIVATE / 'messages.jsonl').open() as inp:
-        run = subprocess.run([str(binary), 'evaluate'], stdin=inp, capture_output=True, text=True, check=True)
-    predictions = [json.loads(line) for line in run.stdout.splitlines()]
+    predictions = store.compiled(db,binary,'evaluate')
     assert len(predictions) == len(messages)
     by_id = {r['message_id']: r for r in predictions}
     assert by_id.keys() == {r['message_id'] for r in messages}
-    report = {'manifest_sha256': hashlib.sha256((PRIVATE / 'manifest.json').read_bytes()).hexdigest(),
+    manifest_source = db.execute("SELECT sha256 FROM source_files WHERE purpose='manifest'").fetchone()
+    report = {'manifest_sha256': manifest_source[0] if manifest_source else None,
+              'label_records_sha256':corpus.digest(corpus.js(labels)),
+              'split_records_sha256':corpus.digest(corpus.js(split)),
               'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
               'policy': {'characters': 12000, 'words': 1500}, 'groups': {},
-              'annotation_limit': '80 opening excerpts reviewed by the implementation agent. This is not independent full-message ground truth. Heldout excerpts were previewed before narrowing the path exemption; final heldout scores are exploratory, not a blind estimate.',
+              'label_source':label_source, 'annotation_limit':'Historical model reviews are fallible; reserved groups have been exposed to earlier triage. This is not an untouched accuracy estimate.',
               'note': 'Distinct bodies, not deliveries. Style errors use only manually reviewed normal/pathological labels. Unreviewed bodies are unassessed, not normal. Ambiguous labels are excluded from error rates.'}
     details = []
     for scope in ['all_plaintext', 'handoff_inputs', 'worker_output_only', 'other_plaintext']:
@@ -118,15 +113,24 @@ def evaluate(binary, output):
         mid = row['message_id']
         details.append({**by_id[mid], 'split': split[mid], 'kinds': row['kinds'],
                         'style_label': labels.get(mid, {}).get('style_label', 'unassessed')})
-    write_private('evaluation.jsonl', details)
-    output.write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps(report, indent=2))
+    run_id = 'evaluation-' + corpus.digest(corpus.js(report)+corpus.checksum(Path(__file__)))[:24]
+    with db:
+        store.create_run(db,run_id,'corpus-evaluation',report)
+        for detail in details:
+            store.put(db,run_id,'prediction',detail['message_id'],detail,detail['message_id'])
+        store.put(db,run_id,'report','summary',report)
+    return {'run_id':run_id,**report}
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'evaluate'])
-    parser.add_argument('--binary', type=Path, default=ROOT / 'target/release/handoff-guard')
-    parser.add_argument('--output', type=Path, default=ROOT / 'data/evaluation.json')
+    parser.add_argument('action',choices=['prepare','evaluate'])
+    parser.add_argument('--database',type=Path,default=store.DATABASE)
+    parser.add_argument('--binary',type=Path,default=ROOT/'target/release/handoff-guard')
+    parser.add_argument('--labels',choices=['labels-full.jsonl','labels-sol.jsonl','labels-reconciled.jsonl','labels.jsonl','none'],default='labels-full.jsonl')
     args = parser.parse_args()
-    prepare() if args.action == 'prepare' else evaluate(args.binary, args.output)
+    db = corpus.connect(args.database)
+    try:
+        print(corpus.js(prepare(db) if args.action=='prepare' else evaluate(db,args.binary,args.labels)))
+    finally:
+        db.close()

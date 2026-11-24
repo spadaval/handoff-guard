@@ -34,7 +34,7 @@ before artifact routing. Adjust the repository path on another installation:
 import { handoffReviewApi } from '/root/handoff-guard/scripts/dashboard-api.ts';
 
 // Inside plugins:
-handoffReviewApi('/root/handoff-guard/data/private/handoffs.sqlite3'),
+handoffReviewApi('/root/handoff-guard/data/handoffs.sqlite3'),
 ```
 
 Vite normally reloads its configuration. If necessary, use the Hub's existing
@@ -43,10 +43,10 @@ The only Hub configuration change made for this application is this plugin impor
 and registration; no package or service changes are required.
 
 Open <http://ai-assistant-ia:5173/artifacts/handoff-context-review/>. A missing
-database produces an explicit retryable error. For an existing local frozen corpus,
-`python3 scripts/context_database.py collect` creates the database and
+database produces an explicit retryable error. Supply the local SQLite database separately from Git.
+`python3 scripts/context_database.py collect` resumes recovery and
 `python3 scripts/analyze_mechanics.py` stores compiled measurements. See
-[the database guide](../docs/context-database.md) for required local inputs.
+[the database guide](../docs/context-database.md) for capture and maintenance.
 
 ## Edit and inspect
 
@@ -61,7 +61,7 @@ both dashboard copies when changing the help text.
 
 There are no automated UI tests. Read and use the rendered application to judge
 layout, context, source excerpts, scores and role icons. Check short and long
-messages, evidence expansion and narrow windows. Store screenshots of actual
-corpus content under ignored `data/private/`, never this directory.
+messages, evidence expansion and narrow windows. Use a temporary ignored location for any real-message screenshots and discard
+them after visual review. Do not create another durable data directory.
 
 The repository's Rust, Python and API tests cover backend behavior separately.

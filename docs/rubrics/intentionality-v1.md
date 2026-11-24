@@ -63,7 +63,7 @@ Keep previous style labels separate; they are not ground truth for this rubric.
 ## Initial random sample
 
 Select 30 distinct handoff input bodies uniformly without replacement from the
-frozen 3,464-body input inventory, sorted by message ID, with Python's
+frozen input inventory, sorted by message ID, with Python's
 `random.Random("intentionality-pilot-v1-20261123")`. Freeze the selected IDs before
 reading their new context or grades. The private selection manifest records
 original split membership and inventory checksum. No substitution for missing

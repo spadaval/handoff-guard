@@ -1,6 +1,6 @@
 # Explain the exchange and assess communication separately
 
-Version: `intentionality-v2`. Preserve the [v1 rubric](rubrics/intentionality-v1.md)
+Version: `intentionality-v2`. Preserve the [v1 rubric](intentionality-v1.md)
 and earlier review runs. The standard remains: have a purpose, select what the
 recipient needs, and state it clearly. Assess one body in one recorded context.
 
@@ -114,8 +114,8 @@ reference IDs can be cited separately. Preserve provenance and recovery limits.
 
 ## Re-analysis scope
 
-Regrade the same 30 IDs in `data/private/context-db-work/random-sample.json`.
-Reuse the earlier chosen contexts in `sample-review/*.selection.json` where
+Regrade the same 30 IDs in the frozen pilot sample stored in SQLite.
+Reuse the earlier chosen contexts in the earlier database review bindings where
 possible so a rubric comparison does not silently change its evidence. Read full
 bodies and relevant stored context, without consulting earlier grades or new
 mechanical predictions. Do not substitute easier messages. Store a separate v2

@@ -1,0 +1,11 @@
+{
+  "version": "style-calibration-1",
+  "seed": "signals-v1-",
+  "control_seed": "signals-control-",
+  "maximum_characters": 8000,
+  "hits_per_rule_per_split": 3,
+  "controls_per_split": 3,
+  "rules": ["punctuation_spacing", "needless_shorthand"],
+  "splits": ["tuning", "heldout"],
+  "rubric": "docs/communication-rubric.md"
+}

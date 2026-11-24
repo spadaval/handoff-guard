@@ -5,13 +5,12 @@ executable. Ordinary prose, short fragments, Markdown, code, URLs, paths and
 hashes need no template. Denials name the check and ask for a rewrite. The guard
 never truncates or changes delivery arguments.
 
-The executable and actual Codex 0.169.0 hook interception are tested. No global
-Codex settings or model catalog were changed. This checkout is not activated as
-a global hook. See [the evaluation report](docs/evaluation.md) for coverage and
-measured misses. The later [full-input triage](docs/triage.md) classifies every
-recovered handoff input and documents reviewer disagreement.
-The [blind 6.1 Sol follow-up](docs/triage-sol.md) reviews every ambiguous input
-and random samples from both definite-label groups.
+The repository contains source, configuration and rubrics. Messages, recovered
+context and all analysis results live in the ignored SQLite database. See
+[the data boundary](data/README.md) and [database commands](docs/context-database.md).
+The local dashboard reads the database directly.
+
+No global Codex settings or model catalog are activated by this project.
 
 ## Policy
 
@@ -54,7 +53,7 @@ Python is only used for offline corpus preparation and the integration test
 harness. Integration tests use the actual installed `codex` executable, a
 loopback scripted Responses server, a fresh child session and a temporary
 `CODEX_HOME`. They make no remote model requests. They neither read nor modify
-the active Codex configuration. Test traces stay under ignored `data/private/`.
+the active Codex configuration. Test traces and summaries are stored in the ignored SQLite database.
 
 ## Install and activate separately
 
@@ -96,23 +95,24 @@ not a sandbox or security boundary.
 
 ## Corpus work
 
-See [data/README.md](data/README.md) for inventory and privacy rules. Exact raw
-text, provenance, manual labels, split assignments and detailed predictions
-remain local and Git-ignored. Public fixtures are synthetic.
+Controls stay as files: [config/](config/), [the rubric](docs/communication-rubric.md),
+[review instructions](docs/review-instructions/) and executable source. Messages,
+provenance, recovered context, labels, samples, diagnostics and every derived
+result stay in `data/handoffs.sqlite3`. This includes aggregate reports.
 
 ```sh
-python3 scripts/export_corpus.py
-python3 scripts/validate_corpus.py
-# Once, before inspecting/tuning rules on a new corpus:
-python3 scripts/evaluate_corpus.py prepare
-python3 scripts/evaluate_corpus.py evaluate
+python3 scripts/context_database.py validate
+python3 scripts/evaluate_corpus.py evaluate --labels labels-full.jsonl
+python3 scripts/analyze_mechanics.py
+python3 scripts/research.py runs
+python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
 ```
 
-`prepare` refuses to overwrite the reserved split. Preserve labels and splits
-before regenerating the corpus. `evaluate` checks the manifest's message and
-observation checksums and invokes the compiled release executable over every
-plaintext body. It writes private per-body results and aggregate-only
-`data/evaluation.json`. Unreviewed bodies are not silently labeled normal.
+These commands use SQLite directly. They create no corpus export or experiment
+folder. The old loose records and reports are preserved in the database's
+checksum-bound historical archive. See [database operations](docs/context-database.md)
+for capture, review and maintenance commands. For a different corpus, capture into
+a new database and freeze its connected-thread split before tuning.
 
 For direct use, `handoff-guard hook` reads one Codex hook JSON event and returns
 `{}` or an explicit denial, exiting zero. Invalid JSON, invalid UTF-8, or a hook
@@ -127,15 +127,14 @@ installation instructions for the existing Artifact Hub server.
 
 The [context dashboard](http://ai-assistant-ia:5173/artifacts/handoff-context-review/)
 reads a page of messages directly from SQLite in a full-window view. It opens
-on the 30-message contextual pilot, with rewrite cases first. The message,
+on the contextual pilot, with rewrite cases first. The message,
 strategic context and tactical assessments form one reading flow. Cited evidence
 expands beneath the explanation it supports; raw source data is available at the
 bottom. Each assessment stays attached to its recorded context. See the
-[pilot report](docs/context-pilot.md), [database guide](docs/context-database.md),
+[database guide](docs/context-database.md),
 [dashboard guide](docs/context-dashboard.md) and [communication rubric](docs/communication-rubric.md).
 
-SQLite is the local analysis store at `data/private/handoffs.sqlite3`; original
-JSONL exports remain unchanged. The agreed communication guidance is in
+SQLite is the single local analysis store at `data/handoffs.sqlite3`. The agreed communication guidance is in
 [AGENTS.md](AGENTS.md). To validate the existing database and update mechanical
 diagnostics:
 
@@ -150,10 +149,10 @@ filters evaluated in SQLite. Click Refresh data after database updates; no JSON
 export or publication step is needed.
 Raw data stays out of Git. The context pilot does not change hook policy.
 
-The [v2 contextual pilot](docs/context-pilot-v2.md) adds participant roles, message
+Contextual assessments include participant roles, message
 stage/type and task summaries. [Mechanical diagnostics](docs/mechanical-checks.md)
 come from `handoff-guard inspect`, sharing the hook implementation.
 The dashboard groups measured size and style checks within readability and
-excludes v1 scores. The current rubric defines four independent readability axes;
+excludes v1 scores. The current rubric defines two independent tactical scores;
 older observations are not converted into new scores. Existing denial thresholds and
 global activation are unchanged.

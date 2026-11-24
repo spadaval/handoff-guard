@@ -51,7 +51,7 @@ def analyze(database, binary):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--database',type=Path,default=ROOT/'data/private/handoffs.sqlite3')
+    parser.add_argument('--database',type=Path,default=ROOT/'data/handoffs.sqlite3')
     parser.add_argument('--binary',type=Path,default=ROOT/'target/release/handoff-guard')
     args=parser.parse_args()
     print(json.dumps(analyze(args.database,args.binary)))

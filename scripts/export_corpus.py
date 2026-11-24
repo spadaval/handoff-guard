@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import sqlite3
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -349,12 +350,29 @@ def export_caches(corpus, directories, native, t3_threads):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "data/private")
+    parser.add_argument("--database", type=Path, default=ROOT / "data/handoffs.sqlite3")
     parser.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
     parser.add_argument("--t3-db", type=Path, default=Path.home() / ".t3/userdata/statev2.sqlite")
     parser.add_argument("--evidence-cache", type=Path, action="append", default=[])
     args = parser.parse_args()
     os.umask(0o077)
+    if args.database.exists():
+        raise SystemExit('Database already exists. Use a new --database; existing reviews and splits must remain frozen.')
+    import context_database as context
+    with tempfile.TemporaryDirectory(prefix='handoff-import-') as temporary:
+        args.output = Path(temporary)
+        capture(args)
+        db = context.connect(args.database)
+        try:
+            context.import_corpus(db,args.output)
+            db.commit()
+            context.recover(db)
+            print(context.js(context.validate(db)))
+        finally:
+            db.close()
+
+
+def capture(args):
     corpus = Corpus(args.output)
     native, t3_threads = export_t3(corpus, args.t3_db)
     state = database(args.codex_home / "state_5.sqlite")

@@ -10,7 +10,7 @@ cargo build --release --locked
 python3 scripts/analyze_mechanics.py
 ```
 
-The analyzer stores compiled diagnostics for all 3,464 distinct input bodies in
+The analyzer stores compiled diagnostics for all distinct handoff input bodies in
 SQLite, with binary/source/script hashes. The dashboard reads those results
 directly; no export or publication step is needed. Worker bodies without a
 handoff-input path are not inserted as input-hook coverage.
@@ -27,9 +27,8 @@ original message when highlighting ranges. Scores are continuous display
 functions of the measurements; thresholds remain explicit and independent.
 See the [rubric](communication-rubric.md) for formulas and model anchors.
 
-Ten Rust checks cover existing decisions, compiled CLI/hook envelopes, thresholds,
-Unicode spans, technical exemptions and advisory behavior. The final inspector
-was also evaluated against the pre-change executable on every recoverable body:
-all 36,078 rule/reason outcomes were identical. No new interception behavior or
-global installation was introduced. The existing stock-hook limitations in the
+Rust checks cover existing decisions, compiled CLI/hook envelopes, thresholds,
+Unicode spans, technical exemptions and advisory behavior. Corpus predictions,
+policy comparisons and their reports live in SQLite. See the calibration
+commands to reproduce a comparison. The existing stock-hook limitations in the
 [README](../README.md) still apply.

@@ -1,216 +1,128 @@
-# Recover local context without changing the corpus
+# One database for message data, files for project controls
 
-`python3 scripts/context_database.py collect` imports the frozen corpus and
-recovers locally recorded evidence into `data/private/handoffs.sqlite3`. It
-then writes `data/private/dashboard.json` using snapshot contract version 1.
-The database and optional JSON export remain Git-ignored. The dashboard queries
-the database directly through a read-only API; exporting or publishing JSON is
-not required. The user authorized serving agent messages through this local
-dashboard. See [dashboard setup](context-dashboard.md).
+`data/handoffs.sqlite3` holds messages and everything derived from them.
+It is ignored by Git. Configuration, rubric definitions, review instructions and
+executable source stay in ordinary tracked files. Runs reference those files and
+record their hashes; a database is not needed to read or edit the rubric.
 
-The collector uses Python's standard library and local read-only SQLite/Git
-queries. Historical Git reads disable lazy fetch and block Git transports.
-It never executes recorded commands, opens network connections, changes
-Codex configuration, edits historical stores, or regenerates exact exports.
-New database and snapshot files use mode 0600; their directory uses mode 0700.
+The existing dashboard reads this database through the read-only Artifact Hub
+API. It requests message previews and selected details, without a JSON snapshot.
+No export or publishing step is required after a database update.
+
+## Use the existing dataset
 
 ```sh
-python3 -m unittest discover -s tests -p test_context_database.py -v
-python3 scripts/context_database.py collect
 python3 scripts/context_database.py validate
-python3 scripts/context_database.py export
+python3 scripts/validate_corpus.py
+python3 scripts/context_database.py collect
+python3 scripts/analyze_mechanics.py
+python3 scripts/evaluate_corpus.py evaluate --labels labels-full.jsonl
+python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
+python3 scripts/research.py runs
 ```
 
-Snapshot evidence and reference text defaults to 1,000 characters per item,
-with `snapshot_original_characters` and `snapshot_omitted_characters` when capped.
-Message bodies remain unmodified. The database keeps its longer recovered text.
-Use `--snapshot-text-limit 0` to export all stored evidence/reference text.
+`collect` resumes context recovery in an existing database. It does not require
+old JSONL files and does not automatically export the database. Original body
+hashes, observation/context bindings, archived-source checksums, manifest counts
+and foreign keys are validated. Integrity failures stop the operation.
 
-The default paths can be changed with `--directory`, `--database`, and
-`--snapshot`. A changed bound input fails collection or validation rather than
-silently replacing previously imported history. Use a new database for a changed
-corpus. Keep the original database when its reviews must remain reproducible.
+`evaluate` stores per-body predictions and aggregate results in SQLite and
+prints its run ID and summary. It distinguishes handoff inputs from worker-only
+and other plaintext bodies. Select the historical label source explicitly when
+comparing runs. Ambiguous labels do not enter binary style confusion counts;
+unreviewed bodies remain unassessed. Earlier review exposure does not become an
+untouched test set merely because its split assignment was retained.
 
-## Bodies, observations and evidence contexts
+## Capture another dataset
 
-`messages` stores exact UTF-8 body hashes and unmodified text. `observations`
-retains every provenance record, including mirrors, keyed by export line and a
-hash of its canonical record. `contexts` gives each observation its own stable
-`ctx-` identifier. These are evidence contexts, **not unique deliveries**. A
-shared body can have several contexts and several later grades. No heuristic
-merges two contexts merely because their text matches.
-
-All messages have context availability through their observations. Input-body
-selection matches `scripts/triage_handoffs.py`: assignment, agent_message,
-followup_assignment, cached_agent_message, and agent_delivery. Observations of
-these bodies receive recovery attempts even when an observation is an output
-mirror. Other output paths retain body/provenance and an explicit
-`non_input_output_path_not_enriched` gap.
-
-`evidence` stores source text, source hashes, provenance and visibility.
-`context_evidence` links it to contexts. `context_references` preserves recovered
-historical files and explicit unavailable references. `historical_reviews`
-imports the original labels, full Luna labels, Sol labels and provisional
-reconciliations as distinct records, including their original metadata. They
-remain body-level style reviews. `splits` preserves the frozen split ledger;
-`corpus_gaps` preserves original extraction gaps. `metadata` stores the original
-manifest, and `source_files` binds imported exports and ledgers to SHA-256.
-
-## What recovery establishes
-
-Codex rollouts supply recorded session instructions, up to eight preceding
-developer/system instruction records, their first recorded user message, latest
-preceding user message, latest turn context and up to twelve preceding text
-response items.
-Tool arguments and results are recorded evidence, not instructions to execute.
-The first user message may contain setup instructions; it is not assumed to be
-the user's original task. Recorded session metadata supplies repository and Git
-revision provenance when available.
-
-Codex history uses the anchor's rollout ordinal to select preceding records.
-T3 uses the recorded observation timestamp to select up to twelve preceding
-messages, the first preceding user message and up to four tools with earlier
-recorded `startedAt` timestamps. Missing timestamps do not fall back to current
-projection order. Missing source anchors and unavailable databases are gaps.
-Audit caches retain recorded context metadata. When a cache references a local
-rollout, a bounded scan seeks exact body hashes in recorded text or decoded
-tool task/message arguments. Up to three matching anchors supply preceding
-records, with match and omission counts. Multiple matches do not establish a
-unique delivery; recovered evidence keeps unknown visibility. Two scan hashes
-are compared before linking evidence. Cache metadata alone does not establish
-original conversation ordering. No cache timestamp is promoted to a delivery ID.
-
-Live Codex state and T3 provider mappings are locator aids only. A unique
-available recorded rollout session can provide historical metadata. A session
-recorded after the observation cannot supply its revision; T3 mapping-only
-links also require recorded session and observation timestamps. Current
-thread settings and current Git HEAD are never historical proof. Multiple
-session candidates leave a gap rather than choosing one historical revision.
-
-Referenced file paths and issue keys are extracted deterministically from the
-body. When a recorded session revision and repository remain available, Git
-can recover local historical blobs, including candidate `AGENTS.md`, `SPEC.md`
-and `README.md`. Issue bodies require an unavailable offline tracker source.
-Current working files are not substituted. The recorded session revision may
-predate edits made during the session; recovered files explicitly do not prove
-the precise filesystem state or recipient access at delivery time.
-
-Recorded handoff inputs are recipient-visible body evidence; this does not
-prove successful delivery. Output mirrors and cache-only bodies have unknown
-visibility. Prior sender conversation is
-`sender_context`; T3 delivery-side records and cache metadata have `unknown`
-visibility. Recovery never makes sender-private history recipient-visible.
-No model grades or invented task summaries are produced; `task_summary` is null.
-Contexts remain partial or unavailable because complete recipient access cannot
-be established from these sources.
-
-## Bounds and reproducibility limits
-
-A rollout scan stops at its initial length or 128 MiB. Evidence text is capped at
-24,000 characters with original/omitted counts. Selection keeps bounded recent
-records and does not claim all selected turns are relevant. Parse errors carry
-counts and up to 100 line numbers. Session metadata lookup examines at most the
-first 32 lines within 1 MiB. Cache files above 128 MiB are unavailable.
-
-Each context attempts up to 24 deduplicated references, with a separate omission
-record above the cap. Historical Git blobs above 65,536 bytes are omitted before
-dumping their contents. Git reads have five-second timeouts. Binary, missing,
-external and unresolved paths retain availability reasons. T3 tool timestamp
-indexes retain at most the most recent 20,000 records per thread, with an
-explicit gap if older tool records were omitted. An eight-thread cache retains
-only timestamps and IDs; selected payloads are fetched by primary key.
-
-Rollout provenance binds the scanned prefix hash and exact evidence-record
-hashes. SQLite provenance binds each recovered row hash and anchor hash.
-Historical live stores can have changed since the frozen corpus export; recovery
-is a later best-effort capture, not an atomic historical snapshot. Validation
-checks imported input-file hashes, stored body and observation hashes, context
-bindings, manifest counts, complete
-observation/context coverage, SQLite integrity and foreign keys. It does not
-require a live historical store to remain byte-identical after recovery.
-
-Collection commits each rollout source group and each batch of up to 100
-observations from database/cache sources. Repeating it verifies inputs and resumes
-pending contexts without duplicating data. A completed unavailable context is a
-recorded recovery result; collection does not silently replace it when external
-sources later reappear. Use a new database for a new recovery capture. Context
-IDs remain stable for unchanged export paths and records; evidence IDs reflect
-provenance and retained text. Snapshot writing uses an atomic file replacement.
-
-## Stable surface for later reviews
-
-Use `input_contexts` to select contexts without relying on private source schemas:
-
-```sql
-SELECT message_id, context_id, status, source, metadata_json
-FROM input_contexts
-ORDER BY message_id, context_id;
+```sh
+python3 scripts/export_corpus.py --database data/new-capture.sqlite3
+python3 scripts/context_database.py collect --database data/new-capture.sqlite3
+python3 scripts/evaluate_corpus.py prepare --database data/new-capture.sqlite3
 ```
 
-`review_runs` requires run ID, rubric version, reviewer, creation timestamp and
-JSON metadata. Store the full rubric, model settings and selection procedure in
-that metadata. New `reviews` require both `message_id` and `context_id`; a
-composite foreign key rejects a context belonging to a different body.
+Extraction uses a temporary directory, imports exact records and source hashes
+into the new database, and removes the temporary files. An existing destination
+is refused. `prepare` freezes connected-thread components and refuses to replace
+an existing split. The heldout hash partition is configured in `config/review.json`.
+Never tune a rule before freezing its split.
 
-The Python helper validates the four grade dimensions and checks that evidence
-IDs belong to the selected context:
+The collector reads local T3 projections, Codex history/rollouts and evidence
+caches. Recorded tool arguments are evidence. It never executes recorded commands
+or JavaScript, fetches remote references, changes historical stores or modifies
+active Codex configuration. Input kinds include assignments, messages, followup
+assignments, cached messages and delivery records. Other output remains a separate
+path, with explicit recovery gaps.
 
-```python
-import sys
-sys.path.insert(0, 'scripts')
-import context_database as c
+## Data model
 
-db = c.connect('data/private/handoffs.sqlite3')
-with db:
-    db.execute('INSERT INTO review_runs VALUES(?,?,?,?,?)',
-               ('my-run', 'communication-v1', 'reviewer-name', c.now(),
-                c.js({'rubric': 'Store the exact rubric here.'})))
-    # Supply an existing message/context pair and evidence IDs from that context.
-    # record has purpose, information_selection, clarity and overall objects,
-    # each with grade and reason, plus rationale and evidence_ids.
-    # c.insert_review(db, 'my-run', context_id, message_id, record)
+- `messages` contains exact text keyed by its UTF-8 SHA-256. `observations` retains
+  original provenance, including mirrors. They are not unique delivery counts.
+- `contexts`, `evidence`, `context_evidence` and `context_references` preserve
+  surrounding records, visibility and unavailable references. Sender history
+  does not establish recipient access. Recovery is bounded and may be partial.
+- `historical_reviews` keeps earlier style ledgers distinct; `splits` keeps the
+  original connected-thread assignments. `review_runs` and `reviews` retain the
+  earlier context-bound model assessments without converting their scales.
+- `mechanical_runs` and `mechanical_results` hold compiled Rust diagnostics.
+- `analysis_runs` and `analysis_records` hold calibration samples, rule labels,
+  policy baselines, newer manual reviews, integration traces and result summaries.
+  Records are keyed by run, kind and key. Message records have a foreign key to
+  their exact body. Repeating an identical write is safe; changing it is refused.
+- `archived_files` maps original historical paths to deduplicated compressed
+  `archived_blobs`. Both exact byte count and SHA-256 are verified. `source_files`
+  binds original import provenance to those internal bytes, not to external files.
+  Original ciphertext exports remain excluded from plaintext classification.
+
+Recovery records missing source anchors, timestamps and recipient access rather
+than guessing them. Historical Git reads disable lazy fetch and transports;
+current working files are not substituted for historical revisions. Evidence
+caps record explicit omission counts. Contexts and bodies remain distinct.
+
+## Review without working-file directories
+
+```sh
+python3 scripts/research.py sample my-review --count 30 --reviewer sol
+python3 scripts/research.py records my-review sample
+python3 scripts/research.py message MESSAGE_ID --context CONTEXT_ID
+python3 scripts/research.py record my-review < /dev/stdin
 ```
 
-Allowed grades are `pass`, `fail`, `ambiguous`, and `unknown`. The helper adds
-review ID, run metadata, rubric version and reviewer to the snapshot analysis
-record. Review insertion is explicit; collection creates no review runs.
-Re-export after inserting reviews. Synthetic tests cover repeat collection,
-exact whitespace, distinct mirrored contexts, snapshot shape, private file modes,
-input checksum mismatch, context/evidence review binding and historical Git
-recovery when the working file has changed.
+`sample` uses `config/review.json` and freezes IDs, split assignments, chosen
+contexts, reviewer and rubric hash. Read each full body and its context, then send
+one manual JSON review to `record` through standard input. The record needs the
+exact `message_id`, frozen `context_id`, `full_message_reviewed: true`, situation
+in `classification.task`, intent in `purpose.reason`, and
+`information_selection`/`presentation` objects with a `score` (1–5 or null) and
+`reason`. Scores below 5 require `issues` with an exact `quote`, `effect` and
+`repair`. Cite only evidence belonging to that context. Use the exact
+anchors and quote/repair requirements in [the rubric](communication-rubric.md).
+Each review is immutable. New manual runs are inspectable through `research.py`;
+the dashboard's existing contextual pilot remains unchanged.
 
-## Completed local capture on 23 November 2026
+Signal-specific calibration uses [its own commands](style-signals-calibration.md).
+The old file-oriented review algorithms remain in `scripts/legacy/` for historical
+reproduction and synthetic regression checks. Their CLIs are retired.
 
-The completed database has 36,078 exact bodies, 86,004 observations and
-86,004 evidence contexts. All 3,464 input bodies have auxiliary evidence;
-3,454 have preceding conversation evidence, and 3,168 have historical file
-recovery. Ten input bodies have no recovered preceding conversation. Metadata
-and historical-file availability do not by themselves establish recipient access.
+## Historical records and maintenance
 
-There are 164,265 evidence records, 68,618 reference records, 7,767 historical
-review records, 36,078 split assignments and 1,118 original corpus gaps.
-References comprise 23,948 recovered records, 44,632 unavailable records and
-38 cap/omission records. Cache-origin scans matched 1,685 observation contexts;
-40 had no exact recorded body match within the scan. These are observations,
-not unique deliveries or distinct body counts.
+```sh
+python3 scripts/research.py archives
+python3 scripts/research.py archive docs/context-pilot-v2.md
+python3 scripts/research.py records style-signals-v3 label
+```
 
-Context status is partial for 12,617 observations and unavailable for 73,387.
-The latter includes 72,801 non-input output observations explicitly left
-unenriched and 586 input-body observations lacking auxiliary recovery. Other
-observations of those bodies can still supply context. No context is declared
-complete solely from sender history. There are no pending contexts, rubric
-review runs or rubric reviews.
+Archive paths are original provenance. They do not imply a required file on disk.
+The one-time consolidation command requires an explicit `--legacy-directory`
+on its first import. It imports old working files transactionally, validates
+all archives and existing table counts, and only then permits `--cleanup`.
+Cleanup verifies every candidate's hash before removing any files. Screenshots,
+the obsolete dashboard snapshot and the old executable are disposable; independent
+decisions and reports are retained. Do not use the historical archive as a second
+active results store.
 
-A full repeat collection preserved all reported table and coverage counts. Integrity, foreign
-keys, input-file checksums, body hashes and observation bindings passed. The
-local aggregate validation record is `data/private/context-database-report.json`.
-
-## Mechanical diagnostics and v2 reviews
-
-The additive `mechanical_runs` and `mechanical_results` tables store compiled
-Rust measurements per body, keyed by a provenance-bound run ID. They do not
-replace observations or contextual model reviews. The exporter includes the
-newest report as each message's `mechanical` field and orders contextual reviews
-by their review-run creation time. V2 review JSON retains classifications and
-anchored ratings alongside compatibility grade fields. Existing v1 records and
-source bindings are preserved. See [the diagnostics guide](mechanical-checks.md).
+`context_database.py export --snapshot PATH` remains an explicit optional legacy
+export for outside tools. It is not part of the dashboard or normal workflow.
+Any such export is message data and must remain ignored. Database files use mode
+0600 and their data directory uses mode 0700. Use SQLite's backup API for backups
+while the dashboard has the database open.

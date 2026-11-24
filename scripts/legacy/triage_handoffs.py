@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'data/private'
 RUN = SOURCE / 'triage-20261123'
 INPUT_KINDS = {'assignment', 'agent_message', 'followup_assignment',
@@ -203,6 +203,7 @@ def validate(require_complete):
 
 
 if __name__ == '__main__':
+    raise SystemExit('Historical file workflow retired. Use scripts/research.py and scripts/calibrate_style_signals.py with SQLite.')
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest='action',required=True)
     prep=sub.add_parser('prepare'); prep.add_argument('--batches',type=int,default=24)

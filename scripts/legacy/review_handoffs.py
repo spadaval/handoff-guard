@@ -200,9 +200,6 @@ def finalize(public_report=None):
     report['style_by_size_policy']={key:dict(collections.Counter(labels[r['message_id']]['style_label'] for r in inputs
                                      if (r['characters']>12000 or r['words']>1500)==over))
                                     for key,over in [('within_limits',False),('over_limits',True)]}
-    report['date']='2026-11-23'
-    report['spot_audit']={'complete_messages_checked':6,'pathological_to_normal_corrections':1,
-                          'reviewer':'gpt-6.1-sol','note':'Small qualitative check; not an independent accuracy estimate.'}
     private_jsonl(RUN/'labels-full.jsonl',sorted(labels.values(),key=lambda r:r['message_id']))
     report['labels_sha256']=hashlib.sha256((RUN/'labels-full.jsonl').read_bytes()).hexdigest()
     private_json(RUN/'summary.json',report)
@@ -212,6 +209,7 @@ def finalize(public_report=None):
 
 
 if __name__=='__main__':
+    raise SystemExit('Historical file workflow retired. Use scripts/research.py and scripts/calibrate_style_signals.py with SQLite.')
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='action',required=True)
     prep=sub.add_parser('prepare');prep.add_argument('--batches',type=int,default=8)
     view=sub.add_parser('page');view.add_argument('batch',type=int);view.add_argument('page',type=int)

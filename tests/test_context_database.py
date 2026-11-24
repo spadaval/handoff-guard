@@ -3,8 +3,11 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 import unittest
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 
 spec = importlib.util.spec_from_file_location('context_database', Path(__file__).resolve().parents[1] / 'scripts/context_database.py')
 c = importlib.util.module_from_spec(spec)
@@ -69,6 +72,15 @@ class DatabaseTest(unittest.TestCase):
         (directory/'messages.jsonl').write_text('changed')
         with self.assertRaises(ValueError):
             c.import_corpus(self.db,directory)
+
+    def test_imported_database_survives_removal_of_source_exports(self):
+        directory, mid = self.fixture()
+        c.import_corpus(self.db,directory)
+        c.recover(self.db)
+        before = c.validate(self.db)
+        for path in directory.iterdir():
+            path.unlink()
+        self.assertEqual(before,c.validate(self.db))
 
     def test_reviews_bind_message_context_run_and_evidence(self):
         directory,mid = self.fixture()

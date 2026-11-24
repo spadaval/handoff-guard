@@ -1,83 +1,46 @@
-# Calibrate two advisory style signals without changing denial policy
+# Calibrate signals without experiment folders
 
-The compiled inspector now reports punctuation spacing and needless shorthand
-beside the existing size, glued-prose and repetition checks. New matches have
-`status: warn` and `enforcement: advisory`. They affect the dashboard score and
-can be highlighted, but never become a hook denial. No global configuration was
-changed.
-
-The first tuning prototypes incorrectly flagged literal array fields,
-`file:line`, command names and Python import lists. The final prototype excludes
-those recognized forms. It looks for missing clause-punctuation spacing, bare
-empty status markers and alphabetic plus chains. The exact scope and continuous
-score formulas are in the [rubric](communication-rubric.md).
-
-## Corpus sweep
-
-The final compiled inspector processed all 36,078 recoverable plaintext bodies,
-including 3,464 handoff inputs and 32,614 worker/other outputs. Input bodies had
-264 punctuation warnings and 60 shorthand warnings; output bodies had neither.
-The warnings can overlap, so these are not distinct-message counts or accuracy
-estimates. The detector deliberately does not scan code-like regions as prose. The shorthand
-sweep found one empty-status marker and 64 plus-chain matches across those
-60 input bodies; the selected manual sample exercises plus chains, while the
-empty-status marker behavior also has invented Rust regression examples.
-
-The old and new compiled `evaluate` commands returned identical rule names and
-reasons for every corpus body. There were zero changed denial decisions. The
-SQLite refresh stores the new measurements for all 3,464 inputs, preserving the
-separate non-input output path.
-
-## Manual calibration
-
-One parent Codex reviewer read the full bodies of 17 selected inputs. Nine were
-used for tuning and eight were reserved until the detector source was frozen.
-Existing connected-thread-component splits were preserved. The tuning messages
-span four components; the heldout messages all belong to one other component.
-The sample mixes seeded warning hits with non-hit controls, with an 8,000-character
-reading limit. Related near-duplicates remain. It is not random delivery sampling,
-a blinded independent review, or a corpus precision/recall estimate.
-
-Labels distinguish present defects, absent defects and ambiguous cases on each
-dimension. Overall normal/pathological/ambiguous labels are recorded separately:
-a message with severe fused words can correctly be negative for these two narrow
-new recognizers. The tuning set has two normal, six pathological and one ambiguous
-message; the heldout set has six pathological and two ambiguous messages.
-
-| Sample | Signal | Detected defects | False positives | Misses | Correct negatives | Ambiguous |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Tuning, 9 messages | Punctuation | 5 | 0 | 0 | 4 | 0 |
-| Tuning, 9 messages | Shorthand | 3 | 0 | 3 | 2 | 1 |
-| Heldout, 8 messages | Punctuation | 3 | 0 | 1 | 4 | 0 |
-| Heldout, 8 messages | Shorthand | 3 | 0 | 3 | 1 | 1 |
-
-No false positives were found in this small final sample. That does not establish
-zero false positives in the remaining corpus. The broad semantic shorthand
-labels include two-part and mixed symbolic forms outside the detector's current
-scope. Those misses are retained, not relabeled as normal to improve the results.
-Heldout examples were not used for another rule revision.
-
-Known misses include missing spaces beside digits, two-part plus expressions,
-and mixed plus/slash shorthand. A technical-looking string can still be unreadable
-prose; the conservative exclusions intentionally trade recall for fewer intrusive
-warnings. The calibration is too narrow to promote these checks to denials.
-
-## Reproduce
+The sampling settings live in [config/calibration.json](../config/calibration.json).
+The anchors live in [the communication rubric](communication-rubric.md). Both are
+tracked files. Frozen IDs, compiled predictions, rule labels and results live in
+the ignored SQLite database.
 
 ```sh
 cargo build --release --locked
-python3 scripts/calibrate_style_signals.py --directory data/private/new-style-experiment
-# Read the tuning bodies, label them, and freeze the source before opening heldout bodies.
-# Existing frozen sample, labels, source freeze and aggregate results:
-python3 scripts/calibrate_style_signals.py --summarize --directory data/private/style-signals-v3
-python3 scripts/analyze_mechanics.py
+python3 scripts/calibrate_style_signals.py prepare --run my-calibration
+python3 scripts/calibrate_style_signals.py show --run my-calibration --split tuning
+python3 scripts/calibrate_style_signals.py label --run my-calibration --split tuning < /dev/stdin
+python3 scripts/calibrate_style_signals.py show --run my-calibration --split heldout
+python3 scripts/calibrate_style_signals.py label --run my-calibration --split heldout < /dev/stdin
+python3 scripts/calibrate_style_signals.py summarize --run my-calibration
 ```
 
-The preparation command uses the pre-change executable retained locally at
-`data/private/context-db-work/pre-style-signals-guard` for exact policy comparison.
-Use `--baseline` to provide that executable on another machine. It refuses to
-replace a frozen experiment. Raw bodies, exact match spans, labels and hashes
-remain under ignored `data/private/style-signals-v3/`; aggregate results are in
-`evaluation.json`. Historical prototype folders remain local. There are no UI
-tests. Rust checks cover advisory/non-denial behavior, technical exclusions,
-compiled executable behavior and Unicode span integrity.
+Preparation compares the compiled guard's full-corpus rule/reason predictions
+with the stored `pre-style-signals-policy` baseline. An incomplete baseline or a
+changed policy fails preparation. No old executable is required. Each experiment
+freezes binary, detector source, rubric and config hashes before review. Tuning
+and heldout samples retain the existing thread-component split. To change a rule,
+start a new run. Do not reopen a reserved set and call it untouched.
+
+Read full messages. Send a JSON list of labels for the exact split through stdin.
+Each entry contains `message_id`, `style_label` (normal/pathological/ambiguous),
+`punctuation_spacing` and `needless_shorthand` (present/absent/ambiguous), `note`
+and `reviewer`. Coverage must be exact. Conflicting replacement labels are refused.
+Overall style labels and the two narrow detector labels are separate judgments.
+
+Summaries are saved in the same database and printed. They report false positives,
+misses, correct predictions and ambiguities separately. Targeted signal hits and
+controls do not estimate corpus prevalence or establish overall accuracy. A small
+sample or one heldout component cannot justify promotion to a blocking rule.
+
+Earlier runs can be inspected without recreating their working folders:
+
+```sh
+python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
+python3 scripts/research.py records style-signals-v3 label
+python3 scripts/research.py archive docs/style-signals-calibration.md
+```
+
+The archive command shows the original historical report. All measurements,
+findings and reports, including aggregates, stay out of Git. This document
+defines the procedure rather than carrying results.

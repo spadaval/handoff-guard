@@ -1,0 +1,10 @@
+{
+  "policy-freeze.json": {
+    "source_sha256": "4de006f0683ccf309aa0f38ad2ba6cc9a1c0a5e34ece6aaaa444d3d8d4d2524b",
+    "notes": "Frozen before heldout style sample review. No subsequent threshold tuning."
+  },
+  "style-signals-v3/rule-freeze.json": {
+    "source_sha256": "8ae501b8bdfb20b01d432a0c80fccd538a0f4ea1694d4664a2a409828a8b1699",
+    "note": "Tuning complete; no heldout bodies read before freezing this source."
+  }
+}

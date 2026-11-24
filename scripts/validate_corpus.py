@@ -67,4 +67,13 @@ def validate(directory):
 
 
 if __name__ == "__main__":
-    validate(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "data/private")
+    if len(sys.argv) > 1 and Path(sys.argv[1]).is_dir():
+        validate(sys.argv[1])  # Explicit legacy import validation, including synthetic fixtures.
+    else:
+        import context_database as corpus
+        path = Path(sys.argv[1]) if len(sys.argv)>1 else corpus.ROOT/'data/handoffs.sqlite3'
+        db = corpus.connect(path)
+        try:
+            print(corpus.js(corpus.validate(db)))
+        finally:
+            db.close()
