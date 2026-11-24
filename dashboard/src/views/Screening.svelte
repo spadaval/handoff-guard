@@ -1,32 +1,30 @@
 <script lang="ts">
-  import { get, type Overview, type MessageList, type Proportion } from "../lib/api.ts";
-  import { data } from "../lib/data.svelte.ts";
-  import { router, href } from "../lib/router.svelte.ts";
-  import { n, pct, ci, date, STRATUM_NAMES } from "../lib/format.ts";
+  import { get, type Overview, type MessageList } from "../lib/api.ts";
+  import { data, prefs } from "../lib/data.svelte.ts";
+  import { href } from "../lib/router.svelte.ts";
+  import { n, date, SCORE_NAMES } from "../lib/format.ts";
   import SampleControls from "../components/SampleControls.svelte";
   import Prop from "../components/Prop.svelte";
   import CIBar from "../components/CIBar.svelte";
   import MessageTable from "../components/MessageTable.svelte";
 
-  const params = $derived(router.route.params);
-  const sample = $derived(params.get("sample") ?? "random");
-  const criterion = $derived(params.get("criterion") ?? "verdict");
-  const listSample = $derived(sample === "all" ? "any" : sample);
   let ov = $state<Overview | null>(null);
   let misses = $state<MessageList | null>(null);
   let falsePos = $state<MessageList | null>(null);
   let error = $state<string | null>(null);
 
-  const missQuery = $derived(new URLSearchParams({ sample: listSample, criterion, hook: "allowed", reviewer: "bad" }));
-  const fpQuery = $derived(new URLSearchParams({ sample: listSample, criterion, hook: "blocked", reviewer: "fine" }));
+  const listSample = $derived(prefs.sample === "fair" ? "fair" : "reviewed");
+  const sampleName = $derived(prefs.sample === "fair" ? "the fair sample" : "all reviewed handoffs");
+  const missQuery = $derived(new URLSearchParams([["sample", listSample], ["hook", "allowed"], ["presentation", "1"], ["presentation", "2"]]));
+  const fpQuery = $derived(new URLSearchParams([["sample", listSample], ["hook", "blocked"], ["presentation", "3"], ["presentation", "4"]]));
 
   $effect(() => {
     const ctl = new AbortController();
-    const q = new URLSearchParams({ sample, criterion });
+    const basis = prefs.basis;
     Promise.all([
-      get<Overview>("/overview?" + q, ctl.signal),
-      get<MessageList>("/messages?page_size=100&" + missQuery, ctl.signal),
-      get<MessageList>("/messages?page_size=100&" + fpQuery, ctl.signal),
+      get<Overview>("/overview?" + new URLSearchParams({ sample: prefs.sample, basis }), ctl.signal),
+      get<MessageList>(`/messages?page_size=100&basis=${basis}&` + missQuery, ctl.signal),
+      get<MessageList>(`/messages?page_size=100&basis=${basis}&` + fpQuery, ctl.signal),
     ])
       .then(([o, m, f]) => {
         ov = o;
@@ -40,43 +38,27 @@
 
   const meta = $derived(data.meta!);
   const s = $derived(ov?.screening);
-  const rows = ["blocked", "warned", "passed", "unassessed"] as const;
-  const allCols = ["bad", "fine", "unknown"] as const;
-  const cols = $derived(s && !rows.some((r) => s.cells[r].unknown) ? (["bad", "fine"] as const) : allCols);
-  const rowNames: Record<string, string> = { blocked: "Blocks", warned: "Allows with a warning", passed: "Allows, no warning", unassessed: "No stored report" };
-  const colNames: Record<string, string> = { bad: "Bad", fine: "Fine", unknown: "No verdict" };
-  const criterionText = $derived(criterion === "verdict" ? "verdict is revise or rewrite" : "presentation score is 1 or 2");
-  function cellHref(row: string, col: string) {
-    return href("/messages", { sample: listSample, criterion, hook: row, reviewer: col });
-  }
-  function cellRole(row: string, col: string) {
-    if (col === "bad" && row === "blocked") return "hit";
-    if (col === "bad" && (row === "warned" || row === "passed")) return "miss";
-    if (col === "fine" && row === "blocked") return "fp";
-    if (col === "fine") return "agree";
+  const rows = $derived(s && Object.values(s.cells.unassessed).some(Boolean) ? (["blocked", "allowed", "unassessed"] as const) : (["blocked", "allowed"] as const));
+  const cols = $derived(s && Object.values(s.cells).some((c) => c.null) ? ["1", "2", "3", "4", "null"] : ["1", "2", "3", "4"]);
+  const rowNames: Record<string, string> = { blocked: "Blocks", allowed: "Allows", unassessed: "No stored report" };
+  function role(row: string, col: string) {
+    const low = col === "1" || col === "2";
+    const high = col === "3" || col === "4";
+    if (row === "blocked" && low) return "hit";
+    if (row === "allowed" && low) return "miss";
+    if (row === "blocked" && high) return "fp";
+    if (row === "allowed" && high) return "agree";
     return "";
   }
-  const unreviewed = $derived(s ? rows.reduce((t, r) => t + s.cells[r].unreviewed, 0) : 0);
-  const ruleMeta = $derived(Object.fromEntries(meta.hook.rules.map((r) => [r.rule, r.statuses])));
-  const bad = $derived(s ? s.cells.blocked.bad + s.cells.warned.bad + s.cells.passed.bad : 0);
-  const fine = $derived(s ? s.cells.blocked.fine + s.cells.warned.fine + s.cells.passed.fine : 0);
-  function share(k: number, N: number): Proportion {
-    if (!N) return null;
-    const z = 1.96,
-      p = k / N,
-      d = 1 + (z * z) / N,
-      c = (p + (z * z) / (2 * N)) / d,
-      h = (z * Math.sqrt((p * (1 - p)) / N + (z * z) / (4 * N * N))) / d;
-    return { k, n: N, p, low: Math.max(0, c - h), high: Math.min(1, c + h) };
-  }
-  const statusOrder = (st: Record<string, unknown>) => ["block", "warn", ...Object.keys(st).filter((k) => k !== "block" && k !== "warn" && k !== "pass")];
+  const cellHref = (row: string, col: string) => href("/messages", { sample: listSample, hook: row, presentation: col });
+  const statusName: Record<string, string> = { block: "blocks", warn: "warning" };
 </script>
 
 <div class="page">
   <header class="head">
     <h1>Hook against reviewers</h1>
     <p class="quiet intro">
-      The hook is read as a screening test and the model reviewers as the reference. A miss is an input reviewers call bad that the hook lets through. A false positive is one the hook blocks that reviewers call fine.
+      Does the hook catch what it can see? It measures only spacing, size and repetition, so it is judged against the reviewers' presentation score alone. A miss is a handoff with Costly or Broken presentation that the hook allows. A false positive is one with Clean or Minor presentation that it blocks.
     </p>
     <SampleControls />
   </header>
@@ -88,76 +70,60 @@
   {:else}
     <section class="section grid">
       <div>
-        <h2>Outcomes in the {STRATUM_NAMES[sample]?.toLowerCase()} sample</h2>
-        <p class="small muted sub">
-          {n(ov.reviewed)} reviewed inputs. Reviewers count an input as bad when its {criterionText}. Hook results are the stored reports.
-        </p>
+        <h2>Hook result against presentation score</h2>
+        <p class="small muted sub">{n(s.low + s.high)} reviewed handoffs in {sampleName}. Hook results are the stored reports.</p>
         <table class="matrix num">
           <thead>
             <tr>
               <th></th>
-              <th class="axis" colspan={cols.length}><span class="rev">Reviewers</span></th>
+              <th class="axis" colspan="2"><span class="rev">Costly or Broken presentation</span></th>
+              <th class="axis" colspan={cols.length - 2}><span class="rev">Clean or Minor</span></th>
             </tr>
             <tr>
               <th class="axis"><span class="hk">Hook</span></th>
-              {#each cols as c}<th class="col">{colNames[c]}</th>{/each}
+              {#each cols as c}<th class="col"><span class="score c{c}">{c === "null" ? "No score" : `${c} ${SCORE_NAMES[c]}`}</span></th>{/each}
             </tr>
           </thead>
           <tbody>
             {#each rows as r}
-              {#if r !== "unassessed" || cols.some((c) => s.cells.unassessed[c])}
-                <tr>
-                  <th class="row">{rowNames[r]}</th>
-                  {#each cols as c}
-                    {@const v = s.cells[r][c]}
-                    {@const role = cellRole(r, c)}
-                    <td class="cell {role}" class:zero={!v}>
-                      <a href={cellHref(r, c)} aria-label="{rowNames[r]}, reviewers {colNames[c]}: {v}">
-                        <span class="v">{n(v)}</span>
-                        {#if role === "miss"}<span class="tag">miss</span>{:else if role === "fp"}<span class="tag">false positive</span>{:else if role === "hit"}<span class="tag">caught</span>{/if}
-                      </a>
-                    </td>
-                  {/each}
-                </tr>
-              {/if}
+              <tr>
+                <th class="row">{rowNames[r]}</th>
+                {#each cols as c}
+                  {@const v = s.cells[r][c]}
+                  {@const kind = role(r, c)}
+                  <td class="cell {kind}" class:zero={!v}>
+                    <a href={cellHref(r, c)} aria-label="Hook {rowNames[r].toLowerCase()}, presentation {c}: {v}">
+                      <span class="v">{n(v)}</span>
+                      {#if kind === "miss"}<span class="tag">miss</span>{:else if kind === "fp"}<span class="tag">false positive</span>{/if}
+                    </a>
+                  </td>
+                {/each}
+              </tr>
             {/each}
           </tbody>
         </table>
-        {#if unreviewed}
-          <p class="xs muted">{n(unreviewed)} sampled inputs are not reviewed yet and are left out.</p>
-        {/if}
-        {#if cols.length === 2}
-          <p class="xs muted">Every reviewed input has a verdict, so the "no verdict" column is hidden.</p>
-        {/if}
+        {#if s.unreviewed}<p class="xs muted">{n(s.unreviewed)} handoffs in this sample are not reviewed yet and are left out.</p>{/if}
       </div>
 
       <div class="metrics">
-        <h2>Test measures</h2>
+        <h2>How well it separates them</h2>
         <dl>
           <div>
-            <dt>Sensitivity</dt>
-            <dd><CIBar x={s.sensitivity} tone="hook" width={120} /><Prop x={s.sensitivity} /></dd>
-            <p>Of {n(bad)} bad inputs, the share the hook blocks.</p>
+            <dt>Blocked, among Costly or Broken presentation</dt>
+            <dd><CIBar x={s.blocked_low} tone="hook" width={120} /><Prop x={s.blocked_low} /></dd>
           </div>
           <div>
-            <dt>Specificity</dt>
-            <dd><CIBar x={s.specificity} tone="hook" width={120} /><Prop x={s.specificity} /></dd>
-            <p>Of {n(fine)} fine inputs, the share the hook allows.</p>
-          </div>
-          <div>
-            <dt>Precision</dt>
-            <dd><CIBar x={s.ppv} tone="hook" width={120} /><Prop x={s.ppv} /></dd>
-            <p>Of inputs the hook blocks, the share reviewers call bad.</p>
-          </div>
-          <div>
-            <dt>Blocks or warns</dt>
-            <dd><CIBar x={s.flagged_sensitivity} tone="hook" width={120} /><Prop x={s.flagged_sensitivity} /></dd>
-            <p>Of bad inputs, the share the hook blocks or warns about. Warnings do not stop delivery.</p>
+            <dt>Allowed, among Clean or Minor presentation</dt>
+            <dd><CIBar x={s.allowed_high} tone="hook" width={120} /><Prop x={s.allowed_high} /></dd>
           </div>
         </dl>
-        {#if sample !== "random"}
-          <p class="xs skew">These measures depend on how the {STRATUM_NAMES[sample]?.toLowerCase()} stratum was chosen and do not describe the corpus.</p>
-        {/if}
+        <div class="outside">
+          <h3 class="small">Outside what the hook can see</h3>
+          <p class="small">
+            <strong class="num">{n(s.outside.k)}</strong> of the {n(s.outside.needs_work)} handoffs that need work do so for intent or content alone, with presentation scored Clean or Minor. No check in the hook could catch them.
+            {#if s.outside.k}<a href={href("/messages", { sample: listSample, cause: "intent-content" })}>Show them</a>{/if}
+          </p>
+        </div>
         <p class="xs muted provenance">
           Stored reports: run <code>{meta.hook.stored_run?.run_id ?? "none"}</code>{#if meta.hook.stored_run}, {date(meta.hook.stored_run.created_at)}{/if}.
           {#if meta.hook.stored_matches_binary === true}They match the current binary.{:else if meta.hook.stored_matches_binary === false}<strong>The current binary is different</strong>; the message reader shows its live result.{/if}
@@ -168,7 +134,7 @@
     <section class="section">
       <header>
         <h2>By check</h2>
-        <p>Every check in the stored reports, as the hook names it.</p>
+        <p>Every check that fires on at least one handoff, as the hook names it.</p>
       </header>
       <div class="scroll">
         <table class="data">
@@ -176,39 +142,37 @@
             <tr>
               <th>Check</th>
               <th>Status</th>
-              <th class="r">All inputs</th>
-              <th class="r">Bad in sample</th>
-              <th class="r">Fine in sample</th>
-              <th colspan="2">Share of bad inputs it marks</th>
+              <th class="r">All handoffs <span class="muted">(exact)</span></th>
+              <th colspan="2">Costly or Broken presentation</th>
+              <th class="r">Clean or Minor</th>
             </tr>
           </thead>
           <tbody>
-            {#each s.rules as rule}
-              {@const corpus = ruleMeta[rule.rule] ?? {}}
-              {@const marked = statusOrder(rule.statuses).filter((st) => rule.statuses[st] || corpus[st])}
-              {#if marked.length}
-                {#each marked as st, i}
-                  {@const x = share(rule.statuses[st]?.bad ?? 0, bad)}
-                  <tr>
-                    {#if i === 0}<td rowspan={marked.length} class="type rulename">{rule.rule}</td>{/if}
-                    <td><span class="st {st}">{st}</span></td>
-                    <td class="r"><a href={href("/messages", { flag: `${rule.rule}:${st}` })}>{n(corpus[st] ?? 0)}</a></td>
-                    <td class="r"><a href={href("/messages", { sample: listSample, criterion, flag: `${rule.rule}:${st}`, reviewer: "bad" })}>{n(rule.statuses[st]?.bad ?? 0)}</a></td>
-                    <td class="r"><a href={href("/messages", { sample: listSample, criterion, flag: `${rule.rule}:${st}`, reviewer: "fine" })}>{n(rule.statuses[st]?.fine ?? 0)}</a></td>
-                    <td class="cib"><CIBar {x} tone="hook" /></td>
-                    <td><Prop {x} /></td>
-                  </tr>
-                {/each}
-              {:else}
-                <tr class="passes">
-                  <td class="type rulename">{rule.rule}</td>
-                  <td colspan="6" class="muted small">Passes every input ({n(corpus.pass ?? 0)}).</td>
+            {#each s.checks as c}
+              {@const statuses = Object.keys(c.sample)}
+              {#each statuses as st, i}
+                {@const low = c.sample[st].low}
+                <tr>
+                  {#if i === 0}<td rowspan={statuses.length} class="type rulename">{c.rule}</td>{/if}
+                  <td><span class="st {st}">{statusName[st] ?? st}</span></td>
+                  <td class="r"><a href={href("/messages", { flag: `${c.rule}:${st}` })}>{n(c.corpus[st] ?? 0)}</a></td>
+                  <td class="cib"><CIBar x={s.low ? { k: low, n: s.low, p: low / s.low } : null} tone="hook" /></td>
+                  <td class="small">
+                    <a href={href("/messages", { sample: listSample, flag: `${c.rule}:${st}`, presentation: "1,2" })}>{n(low)}</a> of {n(s.low)}{#if st === "warn" && c.warned_but_blocked.sample}<span class="muted">; {n(c.warned_but_blocked.sample)} of these were already blocked by another check</span>{/if}
+                  </td>
+                  <td class="r small"><a href={href("/messages", { sample: listSample, flag: `${c.rule}:${st}`, presentation: "3,4" })}>{n(c.sample[st].high)}</a> of {n(s.high)}</td>
                 </tr>
-              {/if}
+              {/each}
             {/each}
           </tbody>
         </table>
       </div>
+      <p class="xs muted foot">
+        A warning does not stop delivery. A handoff another check blocks still carries its warnings, which is why a check can warn on handoffs in this table while the hook's result for them is Blocks.
+        {#if s.silent.length}
+          {s.silent.join(" and ")} {s.silent.length === 1 ? "never fires" : "never fire"} on any of the {n(meta.corpus.inputs)} handoffs and {s.silent.length === 1 ? "is" : "are"} left out.
+        {/if}
+      </p>
     </section>
 
     <section class="section lists">
@@ -217,7 +181,7 @@
           <h2><span class="swatch miss"></span>Misses <span class="num muted">{n(misses?.total ?? 0)}</span></h2>
           {#if misses?.total}<a class="btn" href={href("/messages", missQuery)}>Open as list</a>{/if}
         </header>
-        <p class="small muted">Reviewers call these bad; the hook allows them.</p>
+        <p class="small muted">Costly or Broken presentation, and the hook allows them.</p>
         {#if misses?.messages.length}
           <MessageTable messages={misses.messages} from={missQuery.toString()} compact />
         {:else}
@@ -229,11 +193,11 @@
           <h2><span class="swatch fp"></span>False positives <span class="num muted">{n(falsePos?.total ?? 0)}</span></h2>
           {#if falsePos?.total}<a class="btn" href={href("/messages", fpQuery)}>Open as list</a>{/if}
         </header>
-        <p class="small muted">The hook blocks these; reviewers call them fine.</p>
+        <p class="small muted">Clean or Minor presentation, and the hook blocks them.</p>
         {#if falsePos?.messages.length}
           <MessageTable messages={falsePos.messages} from={fpQuery.toString()} compact />
         {:else}
-          <p class="empty">No false positives in this sample: every input the hook blocks, reviewers also call bad.</p>
+          <p class="empty">No false positives in this sample: every handoff the hook blocks has Costly or Broken presentation.</p>
         {/if}
       </div>
     </section>
@@ -246,7 +210,7 @@
     gap: 14px;
   }
   .intro {
-    max-width: 82ch;
+    max-width: 86ch;
   }
   .grid {
     display: grid;
@@ -268,10 +232,6 @@
     text-align: left;
     padding: 2px 6px;
   }
-  .matrix .axis {
-    font-size: var(--t-xs);
-    text-transform: none;
-  }
   .rev {
     box-shadow: inset 0 -2px 0 var(--reviewer);
   }
@@ -279,9 +239,7 @@
     box-shadow: inset 0 -2px 0 var(--hook);
   }
   .matrix .col {
-    width: 150px;
-    font-size: var(--t-sm);
-    color: var(--ink);
+    width: 120px;
   }
   .matrix .row {
     font-size: var(--t-sm);
@@ -349,13 +307,17 @@
     align-items: center;
     font-size: var(--t-md);
   }
-  .metrics p {
-    font-size: var(--t-xs);
-    color: var(--ink-3);
+  .outside {
+    margin-top: 24px;
+    border-top: 1px solid var(--rule);
+    padding-top: 12px;
   }
-  .skew {
-    margin-top: 16px;
-    font-weight: 600;
+  .outside p {
+    margin-top: 4px;
+    color: var(--ink-2);
+  }
+  .outside strong {
+    color: var(--ink);
   }
   .provenance {
     margin-top: 16px;
@@ -391,12 +353,12 @@
     width: 104px;
     vertical-align: middle;
   }
-  .passes td {
-    color: var(--ink-3);
+  .foot {
+    margin-top: 10px;
+    max-width: 100ch;
   }
   .lists {
     display: grid;
-    grid-template-columns: 1fr;
     gap: 36px;
   }
   .list-head {

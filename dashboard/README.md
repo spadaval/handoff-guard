@@ -45,29 +45,37 @@ live at the root: `npm test` there runs `tests/dashboard-api.test.ts`.
 
 ## Views
 
-- **Overview** answers "how common, and where from". A sample switch (Random,
-  Pilot, Fused, Long, All strata) recomputes every figure; only Random
-  estimates the corpus and the page says so for the others. It shows the
-  verdict split with Wilson intervals, score distributions, issue kinds, a month
-  curve with the first `fused_words` issue and first hook block marked, and a
-  breakdown table by sender model, month, project and size.
-- **Hook vs reviewers** reads the hook as a screening test against the
-  reviewers. Each cell of the outcome table opens its messages. It lists misses
-  and false positives and breaks results down by hook check.
+- **Overview** answers "how many handoffs need work, and where from". It
+  shows needs work with its interval, the split of lowest scores, the three
+  score distributions, which question holds the lowest score, issue kinds, the
+  largest missions day by day, a breakdown by sender model, month, project and
+  size, and a month chart. The sample control (fair sample or all reviewed)
+  and the sender-model choice hold across views.
+- **Hook vs reviewers** answers "does the hook catch what it can see": the
+  hook's result against the presentation score, the share blocked among Costly
+  or Broken and allowed among Clean or Minor, what lies outside the hook's
+  view, each check, and the misses and false positives.
+- **Agreement** cross-tabulates the scores pairs of raters gave the same
+  handoffs. Handoffs the rubric quotes as worked examples are left out.
 - **Messages** is the corpus browser: full-text search and every filter visible
   in the left column with live counts.
 - **Message reader** (`#/m/<id>`) shows the message exactly as written in
-  numbered lines with hook spans and reviewer quotes highlighted, the review
-  and hook result beside it, the plain-English rewrite side by side when there
-  is one, and the recorded context below. `j` and `k` step through highlights;
-  `[` and `]` move through the list the message was opened from.
-- **Rubric** renders `docs/communication-rubric.md` as it is on disk.
+  numbered lines with hook spans and reviewer quotes highlighted, every review
+  with its rubric version, severities and the issue that set each score, the
+  reviewer's clear version side by side when there is one, the reviews side by
+  side when there are several, and the recorded context. `j` and `k` step
+  through highlights; `[` and `]` move through the list the message was opened
+  from.
+- **Rubric** renders `docs/communication-rubric.md` as it is on disk, or the
+  version a review was scored under when opened from that review.
 
 ## Data rules
 
 - Reviews come from `analysis_records` (`kind='review'`) in `manual-review`
-  runs. Older `intentionality-v2` reviews appear only as a collapsed,
-  labelled comparison in the reader.
+  runs. Scores come only from `score()`, `lowest()` and `needsWork()` in
+  `tooling/reviews.ts`. Figures use one reference review per message, set by
+  `reference_reviewer` in `config/review.json`. Older `intentionality-v2`
+  reviews appear only as a collapsed, labelled comparison in the reader.
 - Lists and figures use the stored hook reports. The reader runs the current
   binary on the open message and says when its result differs from the stored
   one, or falls back to the stored report when the binary is missing.

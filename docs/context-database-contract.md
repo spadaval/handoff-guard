@@ -14,9 +14,14 @@ What it relies on:
   `t3_messages` record belongs to the recipient's thread, so its saved model
   selection is never used as the sender model.
 - `analysis_runs` with `kind='manual-review'` and their `analysis_records`:
-  `kind='sample'` gives `stratum`, `split` and `context_id`; `kind='review'`
-  holds the review record defined in `docs/communication-rubric.md`. Run
-  metadata supplies `reviewer` and `rubric_version`.
+  `kind='sample'` gives `stratum` (how the message was picked) and
+  `context_id`; `kind='review'` holds the review record defined in
+  `docs/communication-rubric.md`. Run metadata supplies `reviewer`,
+  `rubric_version` and `rubric_sha256`. A message may have reviews in several
+  runs; figures use the one from the earliest run.
+- `probabilitySample()` in `tooling/reviews.ts`, with the seed in
+  `config/review.json`, defines the fair sample used for prevalence.
+- `splits.record_json` supplies `component`, the mission a handoff belongs to.
 - `mechanical_results` joined to `mechanical_runs`: the reports of the newest
   run only. Reports are rendered from their `checks` array without assuming rule
   names. Span offsets are Unicode scalar offsets.

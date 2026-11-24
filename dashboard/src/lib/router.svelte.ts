@@ -4,7 +4,8 @@ export type Route =
   | { view: "hook"; params: URLSearchParams }
   | { view: "messages"; params: URLSearchParams }
   | { view: "message"; id: string; params: URLSearchParams }
-  | { view: "rubric"; params: URLSearchParams };
+  | { view: "rubric"; params: URLSearchParams }
+  | { view: "agreement"; params: URLSearchParams };
 
 function parse(): Route {
   const raw = location.hash.replace(/^#/, "") || "/";
@@ -14,6 +15,7 @@ function parse(): Route {
   if (parts[0] === "hook") return { view: "hook", params };
   if (parts[0] === "messages") return { view: "messages", params };
   if (parts[0] === "rubric") return { view: "rubric", params };
+  if (parts[0] === "agreement") return { view: "agreement", params };
   if (parts[0] === "m" && parts[1]) return { view: "message", id: parts[1], params };
   return { view: "overview", params };
 }

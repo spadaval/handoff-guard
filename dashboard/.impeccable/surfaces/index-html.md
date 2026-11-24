@@ -21,11 +21,11 @@ Exact text as written. Numbers carry denominator and sample; only the `random` s
 
 THESIS: Every judgment cites the exact text it is about. Refuses the slate two-pane browser with pill badges and the KPI-tile dashboard.
 
-OWN-WORLD: Transcript of record, used for what it does, never as costume: typewriter face (Courier Prime) for message text with numbered source lines, Libre Franklin for UI with tabular figures, bond-white ground (dark: blue-black carbon), black ink, hairline rules and no shadows. One colour per meaning across every view: hook spans, reviewer quotes, verdicts, unknown. No paper texture, legal wording or ornament.
+OWN-WORLD: Transcript of record, used for what it does, never as costume: typewriter face (Courier Prime) for message text with numbered source lines, Libre Franklin for UI with tabular figures, bond-white ground (dark: blue-black carbon), black ink, hairline rules and no shadows. One colour per meaning across every view: hook spans, reviewer quotes, scores, unknown. No paper texture, legal wording or ornament.
 
 STORY: He sees prevalence with its sample, sees where hook and reviewers disagree, opens the cell, reads each message with highlights cited by line:column, compares original and rewrite by size.
 
-FIRST VIEWPORT: Top bar with docket title, four views and a sample switch. Overview: verdict prevalence as n/N with 95% interval for the named stratum, month curve with onset marked, sender-model breakdown, and the hook 2x2 whose cells open message lists. Reader: line-numbered message left, review and hook right, citations jump.
+FIRST VIEWPORT: Top bar with docket title, four views and a sample switch. Overview: needs-work prevalence as n/N with 95% interval for the named stratum, month curve with onset marked, sender-model breakdown, and the hook 2x2 whose cells open message lists. Reader: line-numbered message left, review and hook right, citations jump.
 
 FORM: Grounded candidate 7 of 7 (court transcript on numbered pleading paper), statistics grammar taken from candidate 1 (surveillance bulletin) at the user's direction. seed:079f49bd1a076072
 Raises: one colour, one meaning (airport signage). Every message has a short docket number used everywhere (Factory catalogue). Hairline seams, no shadows (developer console). One sample switch recomputes every figure at once (variable font specimen).

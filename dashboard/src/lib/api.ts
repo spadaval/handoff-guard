@@ -1,15 +1,17 @@
 import type { createDashboardApi } from "../../../scripts/dashboard-api.ts";
 export type { HookCheck, HookReport } from "../../../scripts/dashboard-api.ts";
-export type { Review, Issue, Verdict, Dimension } from "../../../tooling/reviews.ts";
+export type { Review, Issue, Dimension } from "../../../tooling/reviews.ts";
 
 type Api = ReturnType<typeof createDashboardApi>;
 export type Meta = ReturnType<Api["meta"]>;
 export type Overview = ReturnType<Api["overview"]>;
 export type MessageList = ReturnType<Api["list"]>;
 export type MessageSummary = MessageList["messages"][number];
+export type Agreement = ReturnType<Api["agreement"]>;
 export type Detail = NonNullable<Awaited<ReturnType<Api["detail"]>>>;
-export type Proportion = { k: number; n: number; p: number; low: number; high: number } | null;
+export type Proportion = { k: number; n: number; p: number; low?: number; high?: number } | null;
 export type BreakdownRow = Overview["breakdowns"]["model"][number];
+export type Mission = Overview["missions"]["top"][number];
 
 export class ApiError extends Error {
   constructor(

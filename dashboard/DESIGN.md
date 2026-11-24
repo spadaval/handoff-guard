@@ -57,8 +57,30 @@ typography:
     fontSize: "14.5px"
     fontWeight: 400
     lineHeight: 1.62
+  record:
+    fontFamily: "Courier Prime, Courier New, ui-monospace, monospace"
+    fontSize: "13px"
+    fontWeight: 400
+    lineHeight: 1.5
+  record-strong:
+    fontFamily: "Courier Prime, Courier New, ui-monospace, monospace"
+    fontSize: "13.5px"
+    fontWeight: 700
+    lineHeight: 1.4
+  root:
+    fontFamily: "Libre Franklin Variable, Libre Franklin, system-ui, sans-serif"
+    fontSize: "16px"
+    fontWeight: 400
+    lineHeight: 1.5
+  chart:
+    fontFamily: "Libre Franklin Variable, Libre Franklin, system-ui, sans-serif"
+    fontSize: "11px"
+    fontWeight: 500
+    lineHeight: 1.2
 rounded:
+  hair: "1px"
   mark: "2px"
+  chip: "3px"
   control: "4px"
 spacing:
   xs: "4px"
@@ -124,11 +146,12 @@ Restrained strategy: neutrals plus four reserved meanings.
   decided. Hook spans, block and warn chips, the hook series in charts, false
   positives.
 - **Reviewer magenta** (`#b3127a`, dark `#d9509f`): anything a model reviewer
-  quoted or judged bad. Quote highlights, the reviewer series, misses, issue
-  bars, the rewrite size bar.
+  quoted, and sample estimates drawn from reviews. Quote highlights, the needs
+  work series, misses, issue bars, agreement bars, the clear-version size bar.
 - **Score scale** (`#2f7d52` 4 Clean, `#77a35a` 3 Minor, `#b07a0c` 2 Costly,
-  `#c2342b` 1 Broken): the rubric's scale and the verdict derived from it
-  (send, revise, rewrite). Always paired with the number or word.
+  `#c2342b` 1 Broken): the rubric's scale, used for every score, the lowest
+  score and issue severities (minor, costly, broken). Always paired with the
+  number or word.
 - **Unknown grey** (`#9196a0`): null scores, unknown models, missing data.
 
 ### Neutral
@@ -163,6 +186,9 @@ measurable at a glance.
 - Body 0.9375rem, small 0.8125rem, label 0.75rem/600.
 - Message 14.5px/1.62 Courier Prime, ligatures off, whitespace preserved,
   wrapping anywhere so a 2,000-letter run cannot overflow.
+- Record 13px Courier Prime for previews, quotes, evidence and the rubric's
+  code blocks; 13.5px bold for rule names.
+- Chart 11px for axis ticks, gutter numbers, keyboard hints and score cells.
 
 ## Layout
 
@@ -180,8 +206,8 @@ bottom hairline.
 
 ## Shapes
 
-Controls and cells use a 4px radius; marks, quote blocks and citation chips use
-2–3px. Bars in charts end in a 2–4px radius and separate with 2px gaps.
+Controls and cells use a 4px radius; chips, citations and status labels 3px;
+quote blocks and highlight marks 2px; highlighted text runs 1px. Bars in charts end in a 2–4px radius and separate with 2px gaps.
 
 ## Components
 
@@ -204,11 +230,12 @@ jumping to one flashes it once.
 source. Clicking one scrolls the message to the passage. `j` and `k` step
 through all highlights in text order.
 
-### Outcome table
+### Outcome and agreement tables
 
-The hook-against-reviewers table is a grid of raised cells with large counts.
-Misses carry a 2px magenta border, false positives a 2px blue border, empty
-cells a muted count. Every cell is a link to its messages.
+Grids of raised cells with large counts. On the hook page, misses carry a 2px
+magenta border, false positives a 2px blue border. In agreement tables the
+diagonal carries an ink border. Empty cells show a muted count. Every cell is a
+link to its messages.
 
 ### Navigation
 

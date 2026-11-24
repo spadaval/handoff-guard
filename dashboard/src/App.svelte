@@ -7,11 +7,13 @@
   import Messages from "./views/Messages.svelte";
   import Reader from "./views/Reader.svelte";
   import Rubric from "./views/Rubric.svelte";
+  import Agreement from "./views/Agreement.svelte";
 
   reload();
   const tabs = [
     { view: "overview", path: "/", label: "Overview" },
     { view: "hook", path: "/hook", label: "Hook vs reviewers" },
+    { view: "agreement", path: "/agreement", label: "Agreement" },
     { view: "messages", path: "/messages", label: "Messages" },
     { view: "rubric", path: "/rubric", label: "Rubric" },
   ];
@@ -31,7 +33,7 @@
     <div class="status">
       {#if meta}
         <span class="num">
-          {n(meta.reviewed)} of {n(meta.sampled)} sampled inputs reviewed{#if incomplete.length}, {incomplete.length} {incomplete.length === 1 ? "run" : "runs"} still filling{/if}
+          {n(meta.reviewed)} handoffs reviewed{#if meta.several_reviews}, {n(meta.several_reviews)} more than once{/if}{#if incomplete.length}, {incomplete.length} {incomplete.length === 1 ? "run" : "runs"} still filling{/if}
         </span>
         {#if meta.hook.stored_matches_binary === false}
           <span class="warn" title="Lists and figures use stored reports; the reader runs the current binary.">Stored hook reports predate the current binary</span>
@@ -60,6 +62,8 @@
       <Messages />
     {:else if router.route.view === "message"}
       <Reader />
+    {:else if router.route.view === "agreement"}
+      <Agreement />
     {:else}
       <Rubric />
     {/if}

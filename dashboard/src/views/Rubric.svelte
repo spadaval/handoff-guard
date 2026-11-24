@@ -2,15 +2,23 @@
   import { tick } from "svelte";
   import { marked } from "marked";
   import { get } from "../lib/api.ts";
-  import { router } from "../lib/router.svelte.ts";
+  import { router, href } from "../lib/router.svelte.ts";
+  import { data } from "../lib/data.svelte.ts";
 
-  let rubric = $state<{ path: string; markdown: string } | null>(null);
+  type Rubric = { path: string; markdown: string; current: boolean; commit: string | null; requested: string | null; found: boolean };
+  let rubric = $state<Rubric | null>(null);
   let error = $state<string | null>(null);
   let body: HTMLElement | undefined = $state();
+  const sha = $derived(router.route.params.get("sha256"));
+  const version = $derived(router.route.params.get("version"));
 
-  get<{ path: string; markdown: string }>("/rubric")
-    .then((r) => (rubric = r))
-    .catch((e) => (error = e.message));
+  $effect(() => {
+    const ctl = new AbortController();
+    get<Rubric>("/rubric" + (sha ? "?sha256=" + sha : ""), ctl.signal)
+      .then((r) => ((rubric = r), (error = null)))
+      .catch((e) => e.name !== "AbortError" && (error = e.message));
+    return () => ctl.abort();
+  });
 
   const slug = (s: string) => s.toLowerCase().replace(/<[^>]+>/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const parsed = $derived.by(() => {
@@ -42,14 +50,26 @@
     <div class="skeleton" style="height: 600px"></div>
   {:else}
     <nav class="toc small" aria-label="Rubric sections">
-      <p class="xs muted">Read from <code>{rubric.path}</code></p>
+      <p class="xs muted">Read from <code>{rubric.path}</code>{#if rubric.commit} at commit <code>{rubric.commit.slice(0, 8)}</code>{/if}</p>
       <ol>
         {#each parsed.toc.filter((h) => h.depth > 1) as h}
           <li class="d{h.depth}"><a href="#{h.id}" onclick={(e) => { e.preventDefault(); document.getElementById(h.id)?.scrollIntoView(); }}>{h.text}</a></li>
         {/each}
       </ol>
     </nav>
-    <article class="prose" bind:this={body}>{@html parsed.html}</article>
+    <article class="prose" bind:this={body}>
+      {#if sha && !rubric.current && rubric.found}
+        <p class="banner small">
+          This is the rubric as it was when the review was scored{#if version} ({version}){/if}. The current file is {data.meta?.rubric_version}.
+          <a href={href("/rubric")}>Show the current rubric</a>
+        </p>
+      {:else if sha && !rubric.found}
+        <p class="banner small">
+          The rubric this review was scored under{#if version} ({version}){/if} is not in this repository's history, so the current file ({data.meta?.rubric_version}) is shown instead.
+        </p>
+      {/if}
+      {@html parsed.html}
+    </article>
   {/if}
 </div>
 
@@ -81,6 +101,16 @@
   }
   .toc .d3 {
     padding-left: 12px;
+  }
+  .banner {
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 20px;
+    font-weight: 550;
+  }
+  .banner a {
+    margin-left: 6px;
   }
   .prose {
     font-size: var(--t-md);

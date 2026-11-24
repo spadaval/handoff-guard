@@ -2,7 +2,7 @@
   import type { Detail } from "../lib/api.ts";
   import type { Mark } from "../lib/marks.ts";
   import { href } from "../lib/router.svelte.ts";
-  import { n, SCORE_NAMES, VERDICT_NAMES, VERDICT_SCORE, DIMENSION_NAMES, STRATUM_NAMES, humanise } from "../lib/format.ts";
+  import { n, SCORE_NAMES, DIMENSION_NAMES, PICKED_NAMES, CLEAR_VERSION, humanise } from "../lib/format.ts";
 
   let {
     detail,
@@ -11,8 +11,12 @@
     onjump,
     oncompare,
     comparing,
+    selected,
+    onselect,
   }: {
     detail: Detail;
+    selected: number;
+    onselect: (i: number) => void;
     marks: Mark[];
     active: string | null;
     onjump: (id: string) => void;
@@ -20,17 +24,15 @@
     comparing: boolean;
   } = $props();
 
-  const review = $derived(detail.reviews[0] ?? null);
+  const review = $derived(detail.reviews[selected] ?? detail.reviews[0] ?? null);
+  const older = $derived(!!review?.rubric_version && review.rubric_version !== detail.current_rubric);
+  const rubricHref = (at?: string) =>
+    href("/rubric", { ...(review?.rubric_sha256 ? { sha256: review.rubric_sha256 } : {}), ...(review?.rubric_version ? { version: review.rubric_version } : {}), ...(at ? { at } : {}) });
   const r = $derived(review?.record);
   const byId = $derived(new Map(marks.map((m) => [m.id, m])));
   const dims = ["intent", "content", "presentation"] as const;
-  const lowest = $derived.by(() => {
-    if (!r) return null;
-    const scored = dims.filter((d) => typeof r[d]?.score === "number");
-    if (!scored.length) return null;
-    const min = Math.min(...scored.map((d) => r[d].score as number));
-    return { score: min, dims: scored.filter((d) => r[d].score === min) };
-  });
+  const written = $derived(!!review && dims.some((d) => review.scoring[d].written));
+  const SEVERITY_SCORE: Record<string, number> = { broken: 1, costly: 2, minor: 3 };
   const rewriteSize = $derived.by(() => {
     if (!r?.rewrite) return null;
     const original = r.rewrite.of ?? detail.text;
@@ -44,23 +46,40 @@
   <header class="ph">
     <h2 id="review-title"><span class="key rv"></span>Review</h2>
     {#if review}
-      <span class="who xs">{review.reviewer ?? "unknown reviewer"} · <span class="type">{review.run_id}</span>{#if review.rubric_version} · {review.rubric_version}{/if}</span>
+      <span class="who xs">{review.reviewer ?? "unknown reviewer"} · <span class="type">{review.run_id}</span></span>
     {/if}
   </header>
 
   {#if !review || !r}
-    {#if detail.samples.length}
+    {#if detail.picks.length}
       <p class="small quiet">
-        Frozen for review in <span class="type">{detail.samples[0].run_id}</span> ({STRATUM_NAMES[detail.samples[0].stratum] ?? detail.samples[0].stratum} stratum). The review has not been recorded yet.
+        Picked for review in <span class="type">{detail.picks[0].run_id}</span>. The review has not been recorded yet.
       </p>
     {:else}
       <p class="small quiet">Not in any review sample, so no model has reviewed it under the current rubric.</p>
     {/if}
   {:else}
-    <div class="verdict">
-      <span class="vword c{VERDICT_SCORE[review.verdict]}">{VERDICT_NAMES[review.verdict]}</span>
-      {#if lowest}
-        <span class="small quiet">Lowest score {lowest.score} {SCORE_NAMES[lowest.score]}, in {lowest.dims.map((d) => DIMENSION_NAMES[d].toLowerCase()).join(" and ")}</span>
+    {#if detail.reviews.length > 1}
+      <div class="reviews" role="tablist" aria-label="Reviews of this handoff">
+        {#each detail.reviews as rv, i}
+          <button role="tab" aria-selected={i === selected} onclick={() => onselect(i)}>
+            <span>{rv.reviewer ?? "unknown reviewer"}</span>
+            <span class="xs muted"><span class="type">{rv.run_id}</span>, {rv.rubric_version}{rv.reference ? ", used in figures" : ""}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+    <p class="version xs" class:older>
+      Scored under <a href={rubricHref()}>{review.rubric_version ?? "an unrecorded rubric version"}</a>{#if older}; the current rubric is {detail.current_rubric}. Score names and issue kinds below follow {review.rubric_version}{/if}.
+      {#if written}Under that rubric the reviewer wrote each score directly; issues carry no severity.{:else}Each score is the worst severity among the question's issues, or 4 Clean with none.{/if}
+    </p>
+    <div class="lowest">
+      {#if review.lowest.score !== null}
+        <span class="lword"><span class="score c{review.lowest.score}">Lowest score: {review.lowest.score} {SCORE_NAMES[review.lowest.score]}</span>, in {review.lowest.questions.map((d) => DIMENSION_NAMES[d].toLowerCase()).join(" and ")}</span>
+        <span class="small quiet">{review.needs_work ? "Needs work." : "Does not need work."}</span>
+      {:else}
+        <span class="lword">Cannot be judged</span>
+        <span class="small quiet">A question is unknown and nothing else is below 3, so this review cannot say whether the handoff needs work.</span>
       {/if}
     </div>
     <dl class="facts small">
@@ -74,7 +93,7 @@
 
     {#if rewriteSize}
       <button class="rewrite" onclick={oncompare} aria-pressed={comparing}>
-        <span class="rw-label">Plain-English rewrite{rewriteSize.partial ? " of one passage" : ""}</span>
+        <span class="rw-label">{CLEAR_VERSION}{rewriteSize.partial ? " of one passage" : ""}, written by the reviewer</span>
         <span class="num rw-size">{n(rewriteSize.a)} → {n(rewriteSize.b)} characters, {rewriteSize.ratio >= 1 ? `${rewriteSize.ratio.toFixed(1)}×` : `${Math.round((1 - rewriteSize.ratio) * 100)}% shorter`}</span>
         <span class="rw-action">{comparing ? "Show the message" : "Compare side by side"}</span>
       </button>
@@ -82,18 +101,27 @@
 
     {#each dims as d}
       {@const s = r[d]}
+      {@const sc = review.scores[d]}
+      {@const how = review.scoring[d]}
       <article class="dim">
         <header>
-          <h3><a href={href("/rubric", { at: d })}>{DIMENSION_NAMES[d]}</a></h3>
-          <span class="score c{s.score ?? 'null'}">{s.score ?? "–"} {SCORE_NAMES[String(s.score)]}</span>
+          <h3><a href={rubricHref(d)} title="This question in {review.rubric_version ?? 'the rubric'}">{DIMENSION_NAMES[d]}</a></h3>
+          <span class="score c{sc ?? 'null'}">{sc === null ? "Unknown" : `${sc} ${SCORE_NAMES[String(sc)]}`}</span>
         </header>
+        <p class="how xs">
+          {#if how.unknown}The context cannot settle this question.{:else if how.written}Score written by the reviewer.{:else if how.decided_by === null}No issue, so 4 Clean.{:else}Set by the {s.issues?.[how.decided_by]?.severity} issue marked below.{/if}
+        </p>
         <p class="reason">{s.reason}</p>
         {#each s.issues ?? [] as issue, i}
           {@const id = `r-${d}-${i}`}
           {@const m = byId.get(id)}
-          <div class="issue" class:on={active === id} data-issue={id}>
+          <div class="issue" class:on={active === id} class:decides={how.decided_by === i} data-issue={id}>
             <div class="ih">
-              <a class="kind type" href={href("/rubric", { at: d })} title="See the rubric">{issue.kind}</a>
+              <span class="kindline">
+                <a class="kind type" href={rubricHref(d)} title="{issue.kind} as defined in {review.rubric_version ?? 'the rubric'}">{issue.kind}</a>
+                {#if issue.severity}<span class="sev c{SEVERITY_SCORE[issue.severity] ?? 'null'}">{issue.severity}</span>{/if}
+                {#if how.decided_by === i}<span class="sets">sets the score</span>{/if}
+              </span>
               {#if m}
                 <button class="cite type" onclick={() => onjump(id)} title="Show in the message">{m.cite}</button>
               {:else if issue.quote}
@@ -113,9 +141,7 @@
         {/each}
       </article>
     {/each}
-    {#if detail.reviews.length > 1}
-      <p class="xs muted">{detail.reviews.length - 1} more {detail.reviews.length === 2 ? "review" : "reviews"} in other runs: {detail.reviews.slice(1).map((x) => `${x.run_id} (${x.verdict})`).join(", ")}.</p>
-    {/if}
+
   {/if}
 
   {#if detail.legacy_reviews.length}
@@ -175,6 +201,42 @@
   .verdict {
     display: grid;
     gap: 2px;
+  }
+  .reviews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .reviews button {
+    display: grid;
+    text-align: left;
+    border: 1px solid var(--rule-2);
+    border-radius: 4px;
+    background: var(--raised);
+    padding: 4px 10px;
+    font-size: var(--t-sm);
+  }
+  .reviews button[aria-selected="true"] {
+    border-color: var(--ink);
+    box-shadow: inset 0 -2px 0 var(--ink);
+  }
+  .version {
+    color: var(--ink-3);
+  }
+  .version.older {
+    color: var(--ink);
+    font-weight: 550;
+  }
+  .lowest {
+    display: grid;
+    gap: 3px;
+  }
+  .lword {
+    font-size: var(--t-md);
+    font-weight: 600;
+  }
+  .lword .score {
+    font-size: var(--t-md);
   }
   .vword {
     font-size: var(--t-xl);
@@ -258,6 +320,38 @@
     padding: 2px 0 2px 12px;
     display: grid;
     gap: 5px;
+  }
+  .how {
+    color: var(--ink-3);
+  }
+  .kindline {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+  }
+  .sev {
+    font-size: var(--t-xs);
+    font-weight: 650;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .sev::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--c);
+  }
+  .sets {
+    font-size: var(--t-xs);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: inset 0 -1px 0 var(--ink);
+  }
+  .issue.decides {
+    border-left-color: var(--ink-2);
   }
   .issue.on {
     border-left-color: var(--ink);

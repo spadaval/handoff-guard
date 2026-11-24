@@ -1,58 +1,38 @@
 <script lang="ts">
-  import { router, setParams } from "../lib/router.svelte.ts";
-  import { data } from "../lib/data.svelte.ts";
-  import { n, STRATUM_NAMES } from "../lib/format.ts";
+  import { data, prefs, setPref } from "../lib/data.svelte.ts";
+  import { n } from "../lib/format.ts";
 
-  const params = $derived(router.route.params);
-  const sample = $derived(params.get("sample") ?? "random");
-  const criterion = $derived(params.get("criterion") ?? "verdict");
-  const counts = $derived(Object.fromEntries((data.meta?.strata_counts ?? []).map((s) => [s.stratum, s])));
-  const options = $derived([
-    ...(data.meta?.strata ?? []).map((s) => ({ key: s, reviewed: counts[s]?.reviewed ?? 0, sampled: counts[s]?.sampled ?? 0 })),
-    { key: "all", reviewed: data.meta?.reviewed ?? 0, sampled: data.meta?.sampled ?? 0 },
-  ]);
-  function set(name: string, value: string) {
-    const p = new URLSearchParams(params);
-    p.set(name, value);
-    setParams(p);
-  }
+  const s = $derived(data.meta!.samples);
 </script>
 
 <div class="controls">
   <div class="group">
-    <span class="label" id="sample-label">Sample</span>
+    <span class="label" id="sample-label">Figures use</span>
     <div class="seg" role="group" aria-labelledby="sample-label">
-      {#each options as o}
-        <button aria-pressed={sample === o.key} onclick={() => set("sample", o.key)} title="{n(o.reviewed)} of {n(o.sampled)} reviewed">
-          {STRATUM_NAMES[o.key] ?? o.key}<span class="count">{n(o.reviewed)}</span>
-        </button>
-      {/each}
+      <button aria-pressed={prefs.sample === "fair"} onclick={() => setPref("sample", "fair")} disabled={!s.fair.available}>
+        Fair sample<span class="count">{n(s.fair.reviewed)}</span>
+      </button>
+      <button aria-pressed={prefs.sample === "all"} onclick={() => setPref("sample", "all")}>
+        All reviewed<span class="count">{n(s.all.reviewed)}</span>
+      </button>
     </div>
   </div>
-  <div class="group">
-    <span class="label" id="criterion-label">Reviewers call a message bad when</span>
-    <div class="seg" role="group" aria-labelledby="criterion-label">
-      <button aria-pressed={criterion === "verdict"} onclick={() => set("criterion", "verdict")}>Verdict is revise or rewrite</button>
-      <button aria-pressed={criterion === "presentation"} onclick={() => set("criterion", "presentation")}>Presentation scores 1–2</button>
-    </div>
-  </div>
+  <p class="sample-note" class:skewed={prefs.sample === "all"}>
+    {#if prefs.sample === "fair"}
+      The fair sample is the first {n(s.fair.size)} handoffs in the shuffled sampling order, all reviewed. Its shares estimate the {n(data.meta!.corpus.inputs)} handoffs.
+    {:else}
+      <strong>Skewed toward problem messages.</strong> All {n(s.all.reviewed)} reviewed handoffs, including those picked for long letter runs, for length and for the earlier pilot. These shares describe the reviewed set, not the corpus.
+    {/if}
+    Intervals are 95% Wilson intervals for sample estimates. They treat messages as independent, but messages cluster by mission, so the true uncertainty is wider. Counts over all handoffs are exact and have none.
+  </p>
 </div>
-<p class="sample-note" class:skewed={sample !== "random"}>
-  {#if sample === "random"}
-    The random stratum is a fair sample of the {n(data.meta?.corpus.inputs)} handoff inputs, so its shares estimate the corpus.
-  {:else if sample === "all"}
-    All strata pooled. Three strata were chosen on purpose (earlier reviews, fused text, long messages), so these shares describe the sample, not the corpus.
-  {:else}
-    The {STRATUM_NAMES[sample]?.toLowerCase()} stratum was chosen on purpose, so these shares describe that stratum only, not the corpus.
-  {/if}
-</p>
 
 <style>
   .controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px 28px;
-    align-items: flex-end;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 28px;
+    align-items: end;
   }
   .group {
     display: grid;
@@ -64,15 +44,16 @@
     font-weight: 550;
   }
   .sample-note {
-    margin-top: 10px;
     font-size: var(--t-sm);
     color: var(--ink-2);
+    max-width: 92ch;
   }
-  .skewed {
+  .sample-note strong {
     color: var(--ink);
   }
-  .skewed::before {
-    content: "Skewed sample. ";
-    font-weight: 650;
+  @media (max-width: 900px) {
+    .controls {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

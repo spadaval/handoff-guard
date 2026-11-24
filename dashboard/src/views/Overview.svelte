@@ -1,24 +1,21 @@
 <script lang="ts">
   import { get, type Overview } from "../lib/api.ts";
-  import { data } from "../lib/data.svelte.ts";
+  import { data, prefs, setPref } from "../lib/data.svelte.ts";
   import { router, href, setParams } from "../lib/router.svelte.ts";
-  import { n, pct, ci, month, STRATUM_NAMES, VERDICT_NAMES, DIMENSION_NAMES, SCORE_NAMES, humanise } from "../lib/format.ts";
+  import { n, pct, ci, month, DIMENSION_NAMES, SCORE_NAMES, SAMPLE_NAMES } from "../lib/format.ts";
   import SampleControls from "../components/SampleControls.svelte";
   import SegBar from "../components/SegBar.svelte";
   import MonthCurve from "../components/MonthCurve.svelte";
   import Breakdown from "../components/Breakdown.svelte";
-  import Prop from "../components/Prop.svelte";
+  import Missions from "../components/Missions.svelte";
 
   const params = $derived(router.route.params);
-  const sample = $derived(params.get("sample") ?? "random");
-  const criterion = $derived(params.get("criterion") ?? "verdict");
-  const basis = $derived(params.get("basis") ?? "recorded");
   const by = $derived(params.get("by") ?? "model");
   let ov = $state<Overview | null>(null);
   let error = $state<string | null>(null);
 
   $effect(() => {
-    const q = new URLSearchParams({ sample, criterion, basis });
+    const q = new URLSearchParams({ sample: prefs.sample, basis: prefs.basis });
     const ctl = new AbortController();
     get<Overview>("/overview?" + q, ctl.signal)
       .then((r) => ((ov = r), (error = null)))
@@ -27,65 +24,47 @@
   });
 
   const meta = $derived(data.meta!);
-  const listSample = $derived(sample === "all" ? "any" : sample);
-  const criterionLabel = $derived(criterion === "verdict" ? "verdict revise or rewrite" : "presentation 1–2");
-  const bad = $derived.by(() => {
-    if (!ov) return null;
-    if (criterion === "verdict") {
-      // Reviews whose scores are all null have no verdict and are left out,
-      // as they are in the breakdowns and the hook comparison.
-      const k = (ov.verdicts.revise?.k ?? 0) + (ov.verdicts.rewrite?.k ?? 0);
-      const N = k + (ov.verdicts.send?.k ?? 0);
-      return { k, n: N, ...interval(k, N) };
-    }
-    const d = ov.dimensions.presentation;
-    const k = (d["1"] ?? 0) + (d["2"] ?? 0);
-    const N = ov.reviewed - (d["null"] ?? 0);
-    return { k, n: N, ...interval(k, N) };
-  });
-  function interval(k: number, N: number) {
-    if (!N) return { p: 0, low: 0, high: 0 };
-    const z = 1.96,
-      p = k / N,
-      d = 1 + (z * z) / N,
-      c = (p + (z * z) / (2 * N)) / d,
-      h = (z * Math.sqrt((p * (1 - p)) / N + (z * z) / (4 * N * N))) / d;
-    return { p, low: Math.max(0, c - h), high: Math.min(1, c + h) };
+  /** The message-list filter that matches the active sample. */
+  const listSample = $derived(prefs.sample === "fair" ? "fair" : "reviewed");
+  const sampleName = $derived(prefs.sample === "fair" ? "the fair sample" : "all reviewed handoffs");
+  const listHref = (extra: Record<string, string>) => href("/messages", { sample: listSample, ...extra });
+  const corpusHref = (extra: Record<string, string>) => href("/messages", extra);
+  const tabs = [
+    { key: "model", label: "Sender model", field: "model" },
+    { key: "month", label: "Month", field: "month" },
+    { key: "project", label: "Project", field: "project" },
+    { key: "size", label: "Message size", field: "size" },
+  ];
+  const tab = $derived(tabs.find((t) => t.key === by) ?? tabs[0]);
+  function setBy(value: string) {
+    const p = new URLSearchParams(params);
+    p.set("by", value);
+    setParams(p);
   }
+  const fmt = (k: string) =>
+    by === "month" ? month(k, true) : by === "size" ? (k === "unknown" ? "Unknown" : k + " characters") : k === "unknown" ? "Unknown" : k;
   const issues = $derived(ov ? ov.issues.filter((i) => i.k > 0).sort((a, b) => b.k - a.k) : []);
   const absent = $derived(ov ? ov.issues.filter((i) => i.k === 0) : []);
   const maxIssue = $derived(Math.max(1, ...issues.map((i) => i.k)));
-
-  const listHref = (extra: Record<string, string>) => href("/messages", { sample: listSample, criterion, ...extra });
-  const corpusHref = (extra: Record<string, string>) => href("/messages", extra);
-  const field: Record<string, string> = { model: "model", project: "project", size: "size", month: "month" };
-  const tabs = [
-    { key: "model", label: "Sender model" },
-    { key: "month", label: "Month" },
-    { key: "project", label: "Project" },
-    { key: "size", label: "Message size" },
-  ];
-  function set(name: string, value: string) {
-    const p = new URLSearchParams(params);
-    p.set(name, value);
-    setParams(p);
-  }
-  const fmt = (k: string) => (by === "month" ? month(k, true) : by === "size" ? (k === "unknown" ? "Unknown" : k + " characters") : k === "unknown" ? "Unknown" : k);
-  const s = $derived(ov?.screening);
-  const misses = $derived(s ? s.cells.warned.bad + s.cells.passed.bad : 0);
-  const olderRubric = $derived([...new Set(meta.runs.filter((r) => r.reviewed && r.rubric_version && r.rubric_version !== meta.rubric_version).map((r) => r.rubric_version))]);
   const runsFilling = $derived(meta.runs.filter((r) => r.reviewed < r.sampled));
+  const joinDims = (dims: string[]) => {
+    const names = dims.map((d) => DIMENSION_NAMES[d]?.toLowerCase() ?? d);
+    if (names.length === 1) return names[0][0].toUpperCase() + names[0].slice(1) + " alone";
+    const text = names.slice(0, -1).join(", ") + " and " + names.at(-1);
+    return text[0].toUpperCase() + text.slice(1) + ", tied";
+  };
+  const dayName = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 </script>
 
 <div class="page">
   <header class="head">
     <h1>Overview</h1>
     <p class="corpus num">
-      {n(meta.corpus.bodies)} message bodies, of which {n(meta.corpus.inputs)} are handoff inputs.
-      {n(meta.sampled)} inputs are frozen for review in {meta.runs.length} runs and {n(meta.reviewed)} are reviewed{#if runsFilling.length}; {runsFilling.map((r) => `${r.run_id} has ${r.reviewed} of ${r.sampled}`).join(", ")}{/if}.
+      {n(meta.corpus.bodies)} message bodies, of which {n(meta.corpus.inputs)} are handoffs. {n(meta.reviewed)} handoffs are reviewed, in {meta.runs.length} runs{#if runsFilling.length}; {runsFilling.map((r) => `${r.run_id} has ${r.reviewed} of ${r.sampled}`).join(", ")}{/if}.
     </p>
-    {#if olderRubric.length}
-      <p class="rubric-note small">Reviews were recorded under {olderRubric.join(" and ")}; the rubric file is now {meta.rubric_version}. Scores and issue kinds follow the version each review used.</p>
+
+    {#if meta.several_reviews}
+      <p class="note-strong small">{n(meta.several_reviews)} handoffs have more than one review ({n(meta.reviews_total)} reviews in all). Figures use one reference review of each; the reader lists every review and the <a href="#/agreement">Agreement</a> view compares them.</p>
     {/if}
     <SampleControls />
   </header>
@@ -95,44 +74,47 @@
   {:else if !ov}
     <div class="skeleton" style="height: 320px; margin-top: 32px"></div>
   {:else if !ov.reviewed}
-    <section class="section">
-      <p class="empty">No reviews in the {STRATUM_NAMES[sample]?.toLowerCase()} sample yet. {n(ov.sampled)} inputs are frozen for it; figures appear as reviews are recorded.</p>
-    </section>
+    <section class="section"><p class="empty">No handoff in {sampleName} is reviewed yet.</p></section>
   {:else}
+    <p class="basisline small" class:mixed={ov.rubric_mix.length > 1 || ov.rubric_mix[0]?.value !== meta.rubric_version}>
+      Figures rest on one reference review per handoff: {ov.reference_reviewer ?? "any reviewer"}'s review under the newest rubric version it used.
+      {#if ov.rubric_mix.length > 1}
+        This sample mixes rubric versions: {ov.rubric_mix.map((v) => `${n(v.n)} under ${v.value}`).join(", ")}.
+      {:else if ov.rubric_mix[0]}
+        All {n(ov.rubric_mix[0].n)} are scored under {ov.rubric_mix[0].value}{#if ov.rubric_mix[0].value !== meta.rubric_version}; the rubric file is now {meta.rubric_version}{/if}.
+      {/if}
+    </p>
     <section class="section lead">
-      <div class="verdict">
-        <h2>Reviewer verdicts</h2>
-        {#if bad && !bad.n}
-          <p class="hero-line">No reviewed input in this sample has a score for {criterionLabel}, so there is no rate to show.</p>
-        {:else if bad}
-          <p class="hero num">{pct(bad.p)}</p>
+      <div>
+        <h2>Handoffs that need work</h2>
+        {#if ov.needs_work}
+          <p class="hero num">{pct(ov.needs_work.p)}</p>
           <p class="hero-line">
-            of reviewed {STRATUM_NAMES[sample]?.toLowerCase()}-sample inputs are bad by {criterionLabel}:
-            <strong class="num">{n(bad.k)} of {n(bad.n)}</strong>, 95% interval <span class="num">{Math.round(bad.low * 100)}–{Math.round(bad.high * 100)}%</span>.
+            of handoffs in {sampleName} need work: <strong class="num">{n(ov.needs_work.k)} of {n(ov.needs_work.n)}</strong> have a lowest score of 1 Broken or 2 Costly, 95% interval <span class="num">{ci(ov.needs_work)}</span>.
+            {#if ov.unscored}<span class="muted">{n(ov.unscored)} reviews have a missing score and nothing below 3, so they could go either way and are left out.</span>{/if}
           </p>
         {/if}
         <div class="split">
+          <h3 class="small">Lowest of the three scores</h3>
           <SegBar
             tall
-            label="Verdicts"
-            parts={(["send", "revise", "rewrite", "unknown"] as const).map((v) => ({
-              key: v,
-              label: VERDICT_NAMES[v],
-              value: ov!.verdicts[v]?.k ?? 0,
-              cls: { send: "c4", revise: "c2", rewrite: "c1", unknown: "cnull" }[v],
-              href: listHref({ review: v }),
+            label="Lowest score"
+            parts={["4", "3", "2", "1"].map((k) => ({
+              key: k,
+              label: `${k} ${SCORE_NAMES[k]}`,
+              value: ov!.lowest_scores[k]?.k ?? 0,
+              cls: "c" + k,
+              href: listHref({ lowest: k }),
             }))}
           />
           <ul class="legend num">
-            {#each ["send", "revise", "rewrite", "unknown"] as v}
-              {@const x = ov.verdicts[v]}
-              {#if x && (x.k || v !== "unknown")}
-                <li>
-                  <a href={listHref({ review: v })}><span class="score c{({ send: 4, revise: 2, rewrite: 1, unknown: 'null' } as any)[v]}">{VERDICT_NAMES[v]}</span></a>
-                  <span>{n(x.k)}</span>
-                  <span class="muted">{ci(x)}</span>
-                </li>
-              {/if}
+            {#each ["4", "3", "2", "1"] as k}
+              {@const x = ov.lowest_scores[k]}
+              <li>
+                <a href={listHref({ lowest: k })}><span class="score c{k}">{k} {SCORE_NAMES[k]}</span></a>
+                <span>{n(x?.k ?? 0)}</span>
+                <span class="muted">{ci(x)}</span>
+              </li>
             {/each}
           </ul>
         </div>
@@ -145,26 +127,45 @@
                 label="{DIMENSION_NAMES[d]} scores"
                 parts={["4", "3", "2", "1", "null"].map((k) => ({
                   key: k,
-                  label: `${k === "null" ? "" : k + " "}${SCORE_NAMES[k]}`,
+                  label: k === "null" ? "No score" : `${k} ${SCORE_NAMES[k]}`,
                   value: s[k] ?? 0,
                   cls: "c" + k,
-                  href: listHref({ [d]: k === "null" ? "null" : k }),
+                  href: listHref({ [d]: k }),
                 }))}
               />
               <span class="dim-counts num">
-                {#each ["4", "3", "2", "1"] as k}<span title={SCORE_NAMES[k]}><i class="c{k}"></i>{s[k] ?? 0}</span>{/each}
-                {#if s.null}<span title="Unknown"><i class="cnull"></i>{s.null}</span>{/if}
+                {#each ["4", "3", "2", "1"] as k}<span title="{k} {SCORE_NAMES[k]}"><i class="c{k}"></i>{s[k] ?? 0}</span>{/each}
+                {#if s.null}<span title="No score"><i class="cnull"></i>{s.null}</span>{/if}
               </span>
             </div>
           {/each}
-          <p class="xs muted scale">Scale: 4 Clean, 3 Minor, 2 Costly, 1 Broken. The verdict is the lowest score.</p>
+          <p class="xs muted">Scores: 4 Clean, 3 Minor, 2 Costly, 1 Broken. A handoff needs work when its lowest score is 2 or 1.</p>
         </div>
       </div>
 
-      <div class="issues">
-        <h2>Issues reviewers found</h2>
-        <p class="small muted">Share of the {n(ov.reviewed)} reviewed inputs with at least one issue of each kind.</p>
-        <ol>
+      <div>
+        <h2>Which question holds the lowest score</h2>
+        {#if ov.cause.needs_work}
+          <p class="finding">
+            {#if ov.cause.by_dimension.presentation === ov.cause.needs_work && !ov.cause.outside_hook}
+              Presentation holds the lowest score in all {n(ov.cause.needs_work)} handoffs that need work. Intent or content alone never does.
+            {:else}
+              Presentation holds the lowest score in {n(ov.cause.by_dimension.presentation)} of the {n(ov.cause.needs_work)} handoffs that need work; intent or content alone in {n(ov.cause.outside_hook)}.
+            {/if}
+          </p>
+          <ul class="causes num">
+            {#each ov.cause.combinations as c}
+              <li>
+                <span>{joinDims(c.dimensions)}</span>
+                <span class="track"><span class="fill" style:width="{(c.k / ov.cause.needs_work) * 100}%"></span></span>
+                <span class="count">{n(c.k)}<span class="muted">/{n(ov.cause.needs_work)}</span></span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <h2 class="issues-title">Issues reviewers found</h2>
+        <p class="small muted">Handoffs in {sampleName} with at least one issue of each kind, out of {n(ov.reviewed)}.</p>
+        <ol class="issues">
           {#each issues as i}
             <li>
               <a href={listHref({ issue: i.kind })}>
@@ -176,76 +177,84 @@
             </li>
           {/each}
         </ol>
-        {#if absent.length}
-          <p class="xs muted absent">Not found in this sample: {absent.map((i) => i.kind).join(", ")}.</p>
-        {/if}
+        {#if absent.length}<p class="xs muted">Not found: {absent.map((i) => i.kind).join(", ")}.</p>{/if}
       </div>
     </section>
 
-    <section class="section">
-      <header>
-        <h2>Hook against reviewers</h2>
-        <a class="btn" href={href("/hook", { sample, criterion })}>Open the comparison</a>
-      </header>
-      {#if s}
-      <div class="screen-strip num">
-        <a href={href("/messages", { sample: listSample, criterion, hook: "blocked", reviewer: "bad" })}>
-          <span class="big">{n(s.cells.blocked.bad)}</span> bad inputs blocked
-        </a>
-        <a class="miss" href={href("/messages", { sample: listSample, criterion, hook: "allowed", reviewer: "bad" })}>
-          <span class="big">{n(misses)}</span> misses: bad, but the hook allows them
-        </a>
-        <a class="fp" href={href("/messages", { sample: listSample, criterion, hook: "blocked", reviewer: "fine" })}>
-          <span class="big">{n(s.cells.blocked.fine)}</span> false positives: fine, but blocked
-        </a>
-        <span class="sens">Sensitivity <Prop x={s.sensitivity} /></span>
-      </div>
-      {/if}
-    </section>
+    <p class="section hookline small">
+      <strong>The hook</strong> blocks <span class="num">{n(ov.screening.blocked_low?.k ?? 0)} of {n(ov.screening.blocked_low?.n ?? 0)}</span> handoffs in {sampleName} whose presentation is Costly or Broken, and allows <span class="num">{n(ov.screening.allowed_high?.k ?? 0)} of {n(ov.screening.allowed_high?.n ?? 0)}</span> whose presentation is Clean or Minor.
+      <a href={href("/hook")}>See the hook against the reviewers</a>
+    </p>
 
     <section class="section">
       <header>
-        <h2>By month</h2>
-        <p>Month of the earliest recorded observation of each input.</p>
+        <h2>By mission</h2>
       </header>
-      <MonthCurve rows={ov.breakdowns.month} onset={ov.onset} {sample} {criterionLabel} link={(k) => corpusHref({ month: k })} />
+      <p class="note lede">
+        A mission is a connected group of threads. The {n(meta.corpus.inputs)} handoffs fall into {n(ov.missions.count)} missions, but the largest holds
+        <strong class="num">{n(ov.missions.largest?.inputs ?? 0)}</strong> of them ({pct((ov.missions.largest?.inputs ?? 0) / meta.corpus.inputs)}), and
+        <strong class="num">{n(ov.missions.busiest_days.reduce((s, d) => s + d.n, 0))}</strong> were sent on three days: {ov.missions.busiest_days.map((d) => dayName(d.day)).join(", ")}.
+        Within one mission the sender model hardly changes, yet the hook's block rate moves from day to day. Read the days of a mission together before reading anything into a model or a month. Each row links to its handoffs.
+      </p>
+      <Missions
+        missions={ov.missions.top}
+        sparse={meta.sparse}
+        link={(m, day) => corpusHref({ mission: m, ...(day ? { day } : {}) })}
+        sampleLink={(m, day) => listHref({ mission: m, ...(day ? { day } : {}) })}
+      />
+      <p class="xs muted foot">The {ov.missions.top.length} largest missions. Days are UTC days of each handoff's earliest record.</p>
     </section>
-
 
     <section class="section">
       <header>
         <h2>Breakdown</h2>
         <div class="seg" role="group" aria-label="Group by">
           {#each tabs as t}
-            <button aria-pressed={by === t.key} onclick={() => set("by", t.key)}>{t.label}</button>
+            <button aria-pressed={by === t.key} onclick={() => setBy(t.key)}>{t.label}</button>
           {/each}
         </div>
       </header>
+      <p class="note limits">
+        Model, project, month, mission and delivery tool change together in this corpus: most handoffs from November come from one mission, run by one model through one tool. A difference between rows is not evidence that the row's attribute caused it.
+      </p>
       {#if by === "model"}
         <div class="basis">
           <div class="seg" role="group" aria-label="Sender model source">
-            <button aria-pressed={basis === "recorded"} onclick={() => set("basis", "recorded")}>Recorded at send<span class="count">{n(meta.corpus.with_recorded_model)}</span></button>
-            <button aria-pressed={basis === "thread"} onclick={() => set("basis", "thread")}>Add thread setting<span class="count">+{n(meta.corpus.with_thread_model)}</span></button>
+            <button aria-pressed={prefs.basis === "recorded"} onclick={() => setPref("basis", "recorded")}>Recorded at send<span class="count">{n(meta.corpus.with_recorded_model)}</span></button>
+            <button aria-pressed={prefs.basis === "thread"} onclick={() => setPref("basis", "thread")}>Add thread setting<span class="count">+{n(meta.corpus.with_thread_model)}</span></button>
           </div>
           <p class="note">
-            {#if basis === "recorded"}
-              Recorded: the model in the sender's turn context when it sent the message. Only {n(meta.corpus.with_recorded_model)} of {n(meta.corpus.inputs)} inputs have one; the rest are Unknown.
+            {#if prefs.basis === "recorded"}
+              Recorded at send: the model in the sender's turn context. Only {n(meta.corpus.with_recorded_model)} of {n(meta.corpus.inputs)} handoffs have one; the rest are Unknown.
             {:else}
-              Adds the sending thread's saved model selection where no model was recorded. That setting is read at export time, not at send time, and can differ from the model that wrote the message.
+              Adds the sending thread's saved model setting where no model was recorded. That setting is read at export time and can differ from the model that wrote the message.
             {/if}
+            This choice also applies to the message list.
           </p>
+          {#each ov.model_records as r}
+            <p class="note bias">
+              Handoffs with a recorded model are not typical. The hook blocks <strong class="num">{pct(r.recorded?.p)}</strong> ({n(r.recorded?.k)}/{n(r.recorded?.n)}) of {r.model} handoffs with a recorded model, but
+              <strong class="num">{pct(r.thread_only?.p)}</strong> ({n(r.thread_only?.k)}/{n(r.thread_only?.n)}) of those known only from the thread setting.
+            </p>
+          {/each}
         </div>
       {/if}
       <Breakdown
-        rows={ov.breakdowns[by as "model"]}
-        label={tabs.find((t) => t.key === by)!.label}
+        rows={ov.breakdowns[tab.key as "model"]}
+        label={tab.label}
         format={fmt}
-        corpusLink={(k) => corpusHref({ [field[by]]: k, ...(by === "model" ? { basis } : {}) })}
-        sampleLink={(k) => listHref({ [field[by]]: k, review: "reviewed", ...(by === "model" ? { basis } : {}) })}
+        sparse={meta.sparse}
+        corpusLink={(k) => corpusHref({ [tab.field]: k })}
+        sampleLink={(k) => listHref({ [tab.field]: k })}
       />
-      <p class="xs muted foot">
-        Hook figures use every input with a stored report. Reviewer figures use the {STRATUM_NAMES[sample]?.toLowerCase()} sample only, so small groups have wide intervals. Intervals are 95% Wilson intervals.
-      </p>
+    </section>
+
+    <section class="section">
+      <header>
+        <h2>By month</h2>
+        <p>Month of each handoff's earliest record.</p>
+      </header>
+      <MonthCurve rows={ov.breakdowns.month} sampleLabel={SAMPLE_NAMES[prefs.sample].toLowerCase()} sparse={meta.sparse} link={(k) => corpusHref({ month: k })} />
     </section>
   {/if}
 </div>
@@ -253,14 +262,22 @@
 <style>
   .head {
     display: grid;
-    gap: 14px;
+    gap: 12px;
   }
   .corpus {
     color: var(--ink-2);
     font-size: var(--t-md);
     max-width: 90ch;
   }
-  .rubric-note {
+  .note-strong {
+    color: var(--ink);
+    font-weight: 550;
+  }
+  .basisline {
+    margin-top: 16px;
+    color: var(--ink-2);
+  }
+  .basisline.mixed {
     color: var(--ink);
     font-weight: 550;
   }
@@ -279,7 +296,7 @@
   .hero-line {
     margin-top: 6px;
     color: var(--ink-2);
-    max-width: 60ch;
+    max-width: 62ch;
   }
   .hero-line strong {
     color: var(--ink);
@@ -297,6 +314,10 @@
     padding: 0;
     margin: 0;
     font-size: var(--t-sm);
+  }
+  .split h3 {
+    font-weight: 600;
+    color: var(--ink-2);
   }
   .legend li {
     display: inline-flex;
@@ -338,13 +359,33 @@
     border-radius: 2px;
     background: var(--c);
   }
-  .scale {
-    margin-top: 2px;
+  .finding {
+    margin: 12px 0 10px;
+    font-size: var(--t-md);
+    font-weight: 550;
+    max-width: 52ch;
   }
-  .issues ol {
+  .causes {
     list-style: none;
     padding: 0;
-    margin: 14px 0 0;
+    margin: 0 0 28px;
+    display: grid;
+    gap: 6px;
+    font-size: var(--t-sm);
+  }
+  .causes li {
+    display: grid;
+    grid-template-columns: minmax(170px, 1.3fr) minmax(0, 1fr) 52px;
+    gap: 10px;
+    align-items: center;
+  }
+  .issues-title {
+    margin-top: 4px;
+  }
+  .issues {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 8px;
     display: grid;
     gap: 2px;
   }
@@ -353,7 +394,7 @@
     grid-template-columns: minmax(176px, 1.3fr) 116px minmax(0, 1fr) 52px;
     align-items: center;
     gap: 10px;
-    padding: 5px 6px;
+    padding: 4px 6px;
     margin: 0 -6px;
     border-radius: 3px;
     text-decoration: none;
@@ -387,46 +428,35 @@
   .count {
     text-align: right;
   }
-  .absent {
-    margin-top: 12px;
-  }
-  .screen-strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px 40px;
-    align-items: baseline;
-    font-size: var(--t-sm);
+  .hookline {
     color: var(--ink-2);
   }
-  .screen-strip a {
-    text-decoration: none;
-  }
-  .screen-strip a:hover {
+  .hookline strong {
     color: var(--ink);
   }
-  .big {
-    font-size: var(--t-2xl);
-    font-weight: 650;
+  .hookline a {
+    margin-left: 6px;
+    font-weight: 550;
     color: var(--ink);
-    margin-right: 6px;
-    letter-spacing: -0.02em;
   }
-  .miss .big {
-    box-shadow: inset 0 -3px 0 var(--reviewer);
+  .lede {
+    margin-bottom: 16px;
+    max-width: 96ch;
   }
-  .fp .big {
-    box-shadow: inset 0 -3px 0 var(--hook);
+  .lede strong {
+    color: var(--ink);
   }
-  .sens {
-    margin-left: auto;
-    display: inline-flex;
-    gap: 8px;
+  .limits {
+    margin-bottom: 14px;
   }
   .basis {
     display: grid;
     justify-items: start;
     gap: 8px;
     margin-bottom: 14px;
+  }
+  .bias strong {
+    color: var(--ink);
   }
   .foot {
     margin-top: 10px;

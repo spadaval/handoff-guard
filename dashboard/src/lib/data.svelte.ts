@@ -33,3 +33,24 @@ async function check() {
 }
 setInterval(check, 45000);
 addEventListener("visibilitychange", check);
+
+/**
+ * Choices that hold across views: which sample the figures use and how the
+ * sender model is attributed. Kept in this browser between visits.
+ */
+type Prefs = { sample: "fair" | "all"; basis: "recorded" | "thread" };
+function stored(): Prefs {
+  try {
+    const p = JSON.parse(localStorage.getItem("handoff-review-prefs") ?? "{}");
+    return { sample: p.sample === "all" ? "all" : "fair", basis: p.basis === "thread" ? "thread" : "recorded" };
+  } catch {
+    return { sample: "fair", basis: "recorded" };
+  }
+}
+export const prefs = $state<Prefs>(stored());
+export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
+  prefs[key] = value;
+  try {
+    localStorage.setItem("handoff-review-prefs", JSON.stringify(prefs));
+  } catch {}
+}

@@ -4,12 +4,13 @@
   import { get, type Detail, type MessageList, type HookReport, type Review } from "../lib/api.ts";
   import { router, href, messageHref, go } from "../lib/router.svelte.ts";
   import { buildMarks } from "../lib/marks.ts";
-  import { n, docket, date, humanise, STRATUM_NAMES } from "../lib/format.ts";
+  import { n, docket, date, humanise, PICKED_NAMES } from "../lib/format.ts";
   import MessageText from "../components/MessageText.svelte";
   import ReviewPanel from "../components/ReviewPanel.svelte";
   import HookPanel from "../components/HookPanel.svelte";
   import RewriteCompare from "../components/RewriteCompare.svelte";
   import ContextPanel from "../components/ContextPanel.svelte";
+  import ReviewCompare from "../components/ReviewCompare.svelte";
 
   const route = $derived(router.route as Extract<typeof router.route, { view: "message" }>);
   const id = $derived(route.id);
@@ -20,6 +21,7 @@
   let active = $state<string | null>(null);
   let comparing = $state(false);
   let copied = $state(false);
+  let selected = $state(0);
 
   $effect(() => {
     const ctl = new AbortController();
@@ -27,8 +29,12 @@
     error = null;
     active = null;
     comparing = false;
+    selected = 0;
     get<Detail>("/messages/" + id, ctl.signal)
-      .then((d) => (detail = d))
+      .then((d) => {
+        detail = d;
+        selected = Math.max(0, d.reviews.findIndex((r) => r.reference));
+      })
       .catch((e) => e.name !== "AbortError" && (error = e.message));
     return () => ctl.abort();
   });
@@ -44,7 +50,7 @@
     return () => ctl.abort();
   });
 
-  const review = $derived((detail?.reviews[0]?.record ?? null) as Review | null);
+  const review = $derived((detail?.reviews[selected]?.record ?? detail?.reviews[0]?.record ?? null) as Review | null);
   const hook = $derived((detail?.hook.live ?? detail?.hook.stored ?? null) as HookReport | null);
   const built = $derived(detail ? buildMarks(detail.text, hook, review) : null);
   const ordered = $derived(built ? built.marks.filter((m) => m.id !== "rewrite-of") : []);
@@ -92,7 +98,7 @@
     setTimeout(() => (copied = false), 1400);
   }
   const listHref = $derived(from ? href("/messages", new URLSearchParams(from)) : href("/messages"));
-  const sample = $derived(detail?.samples[0]);
+  const pick = $derived(detail?.picks.find((p) => p.picked !== "rerate"));
 </script>
 
 <svelte:window onkeydown={onkey} />
@@ -137,8 +143,15 @@
         </div>
         <div>
           <dt>Sample</dt>
-          <dd>{#if sample}{STRATUM_NAMES[sample.stratum] ?? sample.stratum}, {sample.split ?? "no split"}, <span class="type">{sample.run_id}</span>{:else}<span class="muted">Not sampled</span>{/if}</dd>
+          <dd>{#if pick}{PICKED_NAMES[pick.picked] ?? pick.picked}{#if detail.in_fair_sample}, in the fair sample{/if}, <span class="type">{pick.run_id}</span>{:else}<span class="muted">Never picked for review</span>{/if}</dd>
         </div>
+        <div>
+          <dt>Mission</dt>
+          <dd>{#if detail.mission}<a href={href("/messages", { mission: detail.mission.key })}>{detail.mission.title ?? "Untitled"}</a> <span class="muted num">{n(detail.mission.inputs)} handoffs</span>{:else}<span class="muted">None recorded</span>{/if}</dd>
+        </div>
+        {#if detail.rubric_example}
+          <div><dt>Rubric example</dt><dd>Quoted in the rubric as a worked example, so it is left out of <a href={href("/agreement")}>agreement figures</a></dd></div>
+        {/if}
         <div><dt>Size</dt><dd class="num">{n(detail.scalars)} characters, {n(detail.words)} words, {n(detail.lines)} lines</dd></div>
         {#if detail.thread_title}<div class="wide"><dt>Thread</dt><dd>{detail.thread_title}</dd></div>{/if}
       </dl>
@@ -150,7 +163,7 @@
           {#if review?.rewrite}
             <div class="seg" role="group" aria-label="View">
               <button aria-pressed={!comparing} onclick={() => (comparing = false)}>As written</button>
-              <button aria-pressed={comparing} onclick={() => (comparing = true)}>Beside the rewrite</button>
+              <button aria-pressed={comparing} onclick={() => (comparing = true)}>Beside the clear version</button>
             </div>
           {:else}
             <h2 class="small">As written</h2>
@@ -180,10 +193,20 @@
       </section>
 
       <aside class="side">
-        <ReviewPanel {detail} marks={built.marks} {active} onjump={(mid) => jump(mid)} oncompare={() => (comparing = !comparing)} {comparing} />
+        <ReviewPanel {detail} marks={built.marks} {active} {selected} onselect={(i) => ((selected = i), (active = null))} onjump={(mid) => jump(mid)} oncompare={() => (comparing = !comparing)} {comparing} />
         <HookPanel {detail} marks={built.marks} {active} onjump={(mid) => jump(mid)} />
       </aside>
     </div>
+
+    {#if detail.reviews.length > 1}
+      <section class="section">
+        <header>
+          <h2>{detail.reviews.length} reviews side by side</h2>
+          <a href={href("/agreement")}>How often reviewers agree</a>
+        </header>
+        <ReviewCompare {detail} {selected} onselect={(i) => ((selected = i), (active = null))} />
+      </section>
+    {/if}
 
     <section class="section">
       <header><h2>Recorded context</h2></header>

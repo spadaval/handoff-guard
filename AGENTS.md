@@ -47,8 +47,10 @@ variables and `docs/context-dashboard.md` for what each figure means.
 
 - Show messages exactly as written. Keep hook spans and reviewer quotes
   distinct, and keep the hook's result separate from the reviewers' judgment.
-- Give every share its numerator, denominator and sample. Only the `random`
-  stratum estimates the corpus.
+- Give every share its numerator and denominator, and name its sample.
+  Prevalence comes from the fair sample (`probabilitySample()`) and the
+  reference review of each message. Read scores through `score()`,
+  `lowest()` and `needsWork()`; never from `.score` directly.
 - Render hook checks from the report; do not hard-code rule names.
 - Follow the system light or dark preference, and keep both complete.
 - Do not add automated UI tests or browser assertion suites. Judge readability

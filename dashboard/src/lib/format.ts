@@ -7,8 +7,8 @@ export function pct(p: number | null | undefined, digits = 0) {
   return (p * 100).toFixed(digits) + "%";
 }
 /** "42–67%" */
-export function ci(x: Proportion) {
-  if (!x) return "";
+export function ci(x: Proportion | { k: number; n: number; p: number } | null) {
+  if (!x || !("low" in x) || x.low === undefined || x.high === undefined) return "";
   return `${Math.round(x.low * 100)}–${Math.round(x.high * 100)}%`;
 }
 export const docket = (id: string) => id.slice(0, 8);
@@ -29,9 +29,15 @@ export function time(iso: string | null | undefined) {
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 export const SCORE_NAMES: Record<string, string> = { "4": "Clean", "3": "Minor", "2": "Costly", "1": "Broken", null: "Unknown" };
-export const VERDICT_SCORE: Record<string, string> = { send: "4", revise: "2", rewrite: "1", unknown: "null" };
-export const VERDICT_NAMES: Record<string, string> = { send: "Send", revise: "Revise", rewrite: "Rewrite", unknown: "Unknown" };
-export const STRATUM_NAMES: Record<string, string> = { random: "Random", pilot: "Pilot", fused: "Fused", long: "Long", all: "All strata" };
+/** How a sampled message was picked. Worded so it cannot be read as a hook check or an issue kind. */
+export const PICKED_NAMES: Record<string, string> = {
+  random: "Picked at random",
+  fused: "Picked for long letter runs",
+  long: "Picked for length",
+  pilot: "Earlier pilot set",
+};
+export const SAMPLE_NAMES: Record<string, string> = { fair: "Fair sample", all: "All reviewed" };
+export const CLEAR_VERSION = "Clear version";
 export const DIMENSION_NAMES: Record<string, string> = { intent: "Intent", content: "Content", presentation: "Presentation" };
 export const humanise = (s: string) => s.replace(/_/g, " ");
 export function plural(count: number, one: string, many = one + "s") {

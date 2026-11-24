@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { MessageSummary } from "../lib/api.ts";
   import { messageHref, go } from "../lib/router.svelte.ts";
-  import { n, docket, month, VERDICT_NAMES, VERDICT_SCORE, STRATUM_NAMES, humanise } from "../lib/format.ts";
+  import { n, docket, month, SCORE_NAMES, PICKED_NAMES, humanise } from "../lib/format.ts";
 
   let {
     messages,
@@ -13,7 +13,7 @@
   function hookText(h: MessageSummary["hook"]) {
     if (!h) return { cls: "none", word: "No report", rule: "" };
     if (h.blocked) return { cls: "block", word: "Blocks", rule: h.decision_rule ?? h.flags.find((f) => f.status === "block")?.rule ?? "" };
-    if (h.flags.length) return { cls: "warn", word: "Warns", rule: h.flags.map((f) => f.rule).join(", ") };
+    if (h.flags.length) return { cls: "pass", word: "Allows", rule: "warning: " + h.flags.map((f) => f.rule).join(", ") };
     return { cls: "pass", word: "Allows", rule: "" };
   }
   function highlight(text: string) {
@@ -39,7 +39,7 @@
     <tr>
       <th>No.</th>
       <th>Message as written</th>
-      <th>Review</th>
+      <th>Lowest score</th>
       <th>Hook</th>
       {#if !compact}<th>Sender model</th><th>Project, month</th>{/if}
       <th class="r">Characters</th>
@@ -54,22 +54,26 @@
         <td class="preview">
           <div class="type text">{#if m.preview_clipped}<span class="muted">…</span>{/if}{#each highlight(m.preview) as p}{#if p.hit}<mark>{p.t}</mark>{:else}{p.t}{/if}{/each}</div>
           <div class="meta xs">
-            {m.kinds[0] ? humanise(m.kinds[0]) : "unknown kind"}{#if m.sample} · {STRATUM_NAMES[m.sample.stratum] ?? m.sample.stratum} sample, {m.sample.run_id}{/if}
+            {m.kinds[0] ? humanise(m.kinds[0]) : "unknown kind"}{#if m.picked} · {PICKED_NAMES[m.picked.picked] ?? m.picked.picked}{#if m.in_fair_sample}, in the fair sample{/if}{/if}{#if m.review && m.review.reviews > 1} · {m.review.reviews} reviews{/if}
           </div>
         </td>
         <td class="review">
           {#if m.review}
-            <span class="score c{VERDICT_SCORE[m.review.verdict]}">{VERDICT_NAMES[m.review.verdict]}</span>
+            {#if m.review.lowest === "unknown"}
+              <span class="score cnull">Cannot be judged</span>
+            {:else}
+              <span class="score c{m.review.lowest}" title="Lowest of the three scores">{m.review.lowest} {SCORE_NAMES[m.review.lowest]}</span>
+            {/if}
             <span class="dims num" title="Intent, content, presentation">
-              {#each ["intent", "content", "presentation"] as d}
+              {#each ["intent", "content", "presentation"] as const as d}
                 {@const s = m.review.scores[d]}
                 <span class="d c{s ?? 'null'}">{s ?? "?"}</span>
               {/each}
             </span>
-          {:else if m.sample}
+          {:else if m.picked}
             <span class="muted small">Not reviewed yet</span>
           {:else}
-            <span class="muted small">Not sampled</span>
+            <span class="muted small">Never picked</span>
           {/if}
         </td>
         <td class="hook">

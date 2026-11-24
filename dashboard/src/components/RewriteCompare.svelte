@@ -20,8 +20,8 @@
 
 <div class="compare">
   <p class="summary">
-    {#if rewrite.of}The reviewer rewrote one passage{#if at} ({at}){/if}; the rest of the message is unchanged.{:else}The reviewer rewrote the whole message.{/if}
-    The plain-English version is
+    {#if rewrite.of}The reviewer wrote a clear version of one passage{#if at} ({at}){/if}; the rest of the message is unchanged.{:else}The reviewer wrote a clear version of the whole message.{/if}
+    The clear version is
     <strong class="num">{ratio >= 1 ? `${ratio.toFixed(1)} times as long` : `${Math.round((1 - ratio) * 100)}% shorter`}</strong>.
   </p>
   <div class="cols">
@@ -35,7 +35,7 @@
     </section>
     <section>
       <header>
-        <h3>Plain-English rewrite</h3>
+        <h3>Clear version</h3>
         <span class="num size"><b>{n(b.characters)}</b> characters, {n(b.words)} words</span>
       </header>
       <div class="sizebar rw"><span style:width="{Math.min(100, (b.characters / Math.max(a.characters, b.characters)) * 100)}%"></span></div>

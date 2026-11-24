@@ -1,9 +1,9 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
   import { get, type MessageList } from "../lib/api.ts";
-  import { data } from "../lib/data.svelte.ts";
+  import { data, prefs, setPref } from "../lib/data.svelte.ts";
   import { router, setParams } from "../lib/router.svelte.ts";
-  import { n, month, humanise, STRATUM_NAMES, VERDICT_NAMES, SCORE_NAMES, DIMENSION_NAMES } from "../lib/format.ts";
+  import { n, month, humanise, docket, PICKED_NAMES, SCORE_NAMES } from "../lib/format.ts";
   import MessageTable from "../components/MessageTable.svelte";
 
   const params = $derived(router.route.params);
@@ -16,6 +16,7 @@
   $effect(() => {
     const q = new URLSearchParams(params);
     q.set("page_size", "50");
+    q.set("basis", prefs.basis);
     const ctl = new AbortController();
     loading = true;
     get<MessageList>("/messages?" + q, ctl.signal)
@@ -51,7 +52,7 @@
   function clear(name?: string) {
     const p = new URLSearchParams(params);
     if (name) p.delete(name);
-    else for (const k of [...p.keys()]) if (k !== "sort" && k !== "basis" && k !== "criterion") p.delete(k);
+    else for (const k of [...p.keys()]) if (k !== "sort") p.delete(k);
     p.delete("page");
     if (!name) search = "";
     setParams(p);
@@ -63,26 +64,54 @@
     setParams(p);
   }
 
+  const flagNames = $derived(
+    Object.fromEntries(Object.keys(list?.facets.flag ?? {}).map((k) => {
+      const [rule, status] = k.split(":");
+      return [k, `${rule}: ${status === "block" ? "blocks" : status === "warn" ? "warning" : status}`];
+    })),
+  );
+  const dayNames = $derived(
+    Object.fromEntries(Object.keys(list?.facets.day ?? {}).map((d) => [d, d === "unknown" ? "No recorded time" : new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })])),
+  );
+  const raterNames = $derived(
+    Object.fromEntries(Object.keys(list?.facets.rater ?? {}).map((k) => [k, k.replace("@", " under ")])),
+  );
   type Group = { name: string; label: string; order?: string[]; names?: Record<string, string | undefined>; hidden?: string[]; type?: boolean; limit?: number; note?: string };
   const meta = $derived(data.meta!);
   const issueOrder = $derived(Object.values(meta.issue_kinds).flat() as string[]);
+  const scoreNames = { ...Object.fromEntries(["1", "2", "3", "4"].map((k) => [k, `${k} ${SCORE_NAMES[k]}`])), null: "No score" };
+  const lowestNames = $derived(
+    Object.fromEntries([
+      ...["1", "2", "3", "4"].map((k) => [k, `${k} ${SCORE_NAMES[k]}`]),
+      ["unknown", "Cannot be judged"],
+      ["none", "Not reviewed"],
+    ]),
+  );
+  const missionNames = $derived(
+    Object.fromEntries(Object.entries(list?.mission_titles ?? {}).map(([k, t]) => [k, k === "none" ? "No mission" : `${t ?? "Untitled"} (${docket(k)})`])),
+  );
   const groups: Group[] = $derived([
-    { name: "review", label: "Review", order: ["rewrite", "revise", "send", "unknown", "pending", "none"], names: { ...VERDICT_NAMES, pending: "Not reviewed yet", none: "Not sampled" }, hidden: ["reviewed"] },
-    { name: "sample", label: "Sample stratum", order: ["random", "pilot", "fused", "long", "none"], names: { ...STRATUM_NAMES, none: "Not sampled" }, hidden: ["any"] },
-    { name: "hook", label: "Hook result", order: ["blocked", "warned", "passed", "unassessed"], names: { blocked: "Blocks", warned: "Allows with a warning", passed: "Allows, no warning", unassessed: "No stored report" }, hidden: ["allowed"] },
-    { name: "flag", label: "Hook check", type: true, note: "Stored reports" },
+    { name: "sample", label: "Sample", order: ["fair", "reviewed", "waiting", "none"], names: { fair: "In the fair sample", reviewed: "Reviewed", waiting: "Picked, not reviewed yet", none: "Never picked" } },
+    { name: "picked", label: "How it was picked", order: ["random", "fused", "long", "pilot"], names: PICKED_NAMES },
+    { name: "lowest", label: "Lowest score", order: ["1", "2", "3", "4", "unknown", "none"], names: lowestNames },
+    { name: "several", label: "Reviews", order: ["yes", "no"], names: { yes: "Reviewed more than once", no: "Reviewed once" }, hidden: [] },
+    { name: "rater", label: "Reviewed by", names: raterNames },
+    { name: "example", label: "Rubric example", order: ["yes", "no"], names: { yes: "Quoted in the rubric", no: "Not quoted" } },
+    { name: "cause", label: "Needs work because of", order: ["presentation", "intent-content"], names: { presentation: "Presentation, alone or tied", "intent-content": "Intent or content only" } },
+    { name: "hook", label: "Hook result", order: ["blocked", "allowed", "unassessed"], names: { blocked: "Blocks", allowed: "Allows", unassessed: "No stored report" } },
+    { name: "flag", label: "Hook check fired", type: true, names: flagNames },
     { name: "issue", label: "Reviewer issue", order: issueOrder, type: true, limit: 8 },
-    { name: "presentation", label: "Presentation score", order: ["1", "2", "3", "4", "null"], names: { ...Object.fromEntries(["1", "2", "3", "4"].map((k) => [k, `${k} ${SCORE_NAMES[k]}`])), null: "Unknown" }, hidden: ["none"] },
-    { name: "content", label: "Content score", order: ["1", "2", "3", "4", "null"], names: { ...Object.fromEntries(["1", "2", "3", "4"].map((k) => [k, `${k} ${SCORE_NAMES[k]}`])), null: "Unknown" }, hidden: ["none"] },
-    { name: "intent", label: "Intent score", order: ["1", "2", "3", "4", "null"], names: { ...Object.fromEntries(["1", "2", "3", "4"].map((k) => [k, `${k} ${SCORE_NAMES[k]}`])), null: "Unknown" }, hidden: ["none"] },
-    { name: "rewrite", label: "Plain-English rewrite", order: ["yes", "no"], names: { yes: "Has a rewrite", no: "No rewrite" } },
+    { name: "presentation", label: "Presentation score", order: ["1", "2", "3", "4", "null"], names: scoreNames, hidden: ["none"] },
+    { name: "content", label: "Content score", order: ["1", "2", "3", "4", "null"], names: scoreNames, hidden: ["none"] },
+    { name: "intent", label: "Intent score", order: ["1", "2", "3", "4", "null"], names: scoreNames, hidden: ["none"] },
+    { name: "clear", label: "Clear version", order: ["yes", "no"], names: { yes: "Reviewer wrote one", no: "None" } },
+    { name: "mission", label: "Mission", limit: 5, names: missionNames },
+    { name: "day", label: "Day", limit: 5, names: dayNames },
     { name: "model", label: "Sender model", limit: 6 },
     { name: "month", label: "Month", order: [...meta.facets.months].reverse().concat("unknown"), names: Object.fromEntries([...meta.facets.months, "unknown"].map((m) => [m, month(m, true)])) },
     { name: "project", label: "Project" },
     { name: "size", label: "Size in characters", order: meta.size_buckets },
     { name: "kind", label: "Recorded kind", names: {} },
-    { name: "run", label: "Review run", limit: 4 },
-    { name: "split", label: "Split", order: ["tuning", "heldout"] },
   ]);
   function entries(g: Group) {
     const counts = list?.facets[g.name] ?? {};
@@ -91,15 +120,15 @@
     for (const a of active) if (!keys.includes(a)) keys.push(a);
     if (g.order) keys.sort((a, b) => (g.order!.indexOf(a) + 1 || 999) - (g.order!.indexOf(b) + 1 || 999));
     else keys.sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b));
-    if (g.name === "sample" || g.name === "review") keys = keys.filter((k) => counts[k] || active.includes(k));
+    if (g.name === "sample" || g.name === "lowest" || g.name === "cause") keys = keys.filter((k) => counts[k] || active.includes(k));
     return keys.map((k) => ({ key: k, count: counts[k] ?? 0, label: g.names?.[k] ?? (g.name === "kind" ? humanise(k) : k === "unknown" ? "Unknown" : k), on: active.includes(k) }));
   }
   const activeChips = $derived(
     [...new Set([...params.keys()])]
-      .filter((k) => !["sort", "page", "basis", "criterion", "q", "page_size"].includes(k))
+      .filter((k) => !["sort", "page", "basis", "q", "page_size"].includes(k))
       .flatMap((k) => values(k).map((v) => ({ name: k, value: v, label: groups.find((g) => g.name === k)?.names?.[v] ?? v, group: groups.find((g) => g.name === k)?.label ?? chipNames[k] ?? k }))),
   );
-  const chipNames: Record<string, string> = { reviewer: "Reviewers", flag: "Hook check" };
+  const chipNames: Record<string, string> = { flag: "Hook check fired", agree: "Two reviews scored", pair: "Reviewed by both" };
   const page = $derived(list?.page ?? 0);
   const pages = $derived(list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1);
   const fromQuery = $derived.by(() => {
@@ -115,7 +144,7 @@
       <span class="visually-hidden">Search message text or ID</span>
       <input type="search" placeholder="Search text or message ID" bind:value={search} oninput={onSearch} />
     </label>
-    <p class="xs muted hint">Searches the full text of every handoff input, ignoring case.</p>
+    <p class="xs muted hint">Searches the full text of every handoff, ignoring case.</p>
     {#each groups as g (g.name)}
       {@const items = entries(g)}
       {#if items.length}
@@ -127,8 +156,8 @@
           </legend>
           {#if g.name === "model"}
             <div class="seg mini" role="group" aria-label="Sender model source">
-              <button aria-pressed={(params.get("basis") ?? "thread") === "recorded"} onclick={() => set("basis", "recorded")}>Recorded</button>
-              <button aria-pressed={(params.get("basis") ?? "thread") === "thread"} onclick={() => set("basis", null)}>With thread setting</button>
+              <button aria-pressed={prefs.basis === "recorded"} onclick={() => setPref("basis", "recorded")}>Recorded at send</button>
+              <button aria-pressed={prefs.basis === "thread"} onclick={() => setPref("basis", "thread")}>Add thread setting</button>
             </div>
           {/if}
           {#each shown as it (it.key)}
@@ -152,7 +181,7 @@
     <header class="results-head">
       <div>
         <h1 class="num">
-          {#if list}{n(list.total)} <span class="of">of {n(list.corpus)} handoff inputs</span>{:else}Messages{/if}
+          {#if list}{n(list.total)} <span class="of">of {n(list.corpus)} handoffs</span>{:else}Messages{/if}
         </h1>
         {#if activeChips.length || params.get("q")}
           <div class="chips">
