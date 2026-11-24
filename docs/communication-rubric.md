@@ -1,6 +1,6 @@
 # What a good handoff does
 
-Version: `handoff-v8`.
+Version: `handoff-v9`.
 
 A handoff is any message one agent sends another: an assignment, a question, a
 result or an update.
@@ -17,31 +17,41 @@ A review answers three questions in order. Each one depends on the one before.
    intent, and nothing that gets in the way?
 3. **Presentation.** Can the recipient read it in one pass?
 
-## One scale for all three
+## Findings first, scores derived
 
-Scores describe what happens to the recipient, not how the message looks.
+A reviewer does not write scores. A reviewer writes **issues**, and each score
+is computed from them. That keeps every number tied to the text that earned it.
 
-| Score | Name | What happens to the recipient |
+An issue names its kind, quotes the exact text, says what the recipient would
+have to guess, gives a repair, and carries a **severity**. Severity describes
+what happens to the recipient because of that one issue:
+
+| Severity | Score | What happens to the recipient |
 | --- | --- | --- |
-| **4** | Clean | Nothing to fix. |
-| **3** | Minor | A small fix would help. The recipient still acts correctly without guessing. |
-| **2** | Costly | The recipient has to guess, reconstruct or ask. A careful one probably recovers. |
-| **1** | Broken | The recipient cannot reliably recover the meaning. A wrong action or a stall is likely. |
+| none | **4** Clean | No issue. Nothing to fix. |
+| `minor` | **3** Minor | A small fix would help. The recipient still acts correctly without guessing. |
+| `costly` | **2** Costly | The recipient has to guess, reconstruct or ask. A careful one probably recovers. |
+| `broken` | **1** Broken | The recipient cannot reliably recover the meaning. A wrong action or a stall is likely. |
 
-Use `null` when the available context cannot settle the question. Do not use a
-middle score to mean "unsure".
+A question's score is the worst severity among its issues, and 4 when it has
+none. Decide each severity for the passage you quoted, before you look at the
+others. Do not adjust one to make the total come out as you expected.
 
-A score below 4 needs at least one issue. Each issue names its kind, quotes the
-exact text, says what the recipient would have to guess, and gives a repair.
+When a defect runs through the whole message, such as fused words in every
+sentence, record it once with a representative quote and judge its severity
+for the message as a whole.
+
+When the available context cannot settle a question, mark it `unknown` and say
+why. Do not invent a minor issue to mean "unsure".
+
 Each question has its own issue kinds, and a kind is only valid under its own
 question.
 
-The **verdict** is derived from the scores and is never judged separately:
-`rewrite` when any score is 1, `revise` when the lowest is 2, `send` when all
-three are 3 or 4, and `unknown` otherwise. A null score cannot be cleared by
-the other two, so a message with a null and no score below 3 is `unknown`. One score of 1 is enough
-for `rewrite`, even when the other two are 4. Do not raise a score to avoid
-that.
+A message **needs work** when its lowest score is 1 or 2. There is no separate
+overall grade. Report the lowest score together with the question it came
+from, because a message that cannot be read and a message that is missing a
+fact need different fixes. An unknown question cannot be cleared by the other
+two: with one unknown and nothing below 3, the message is unknown.
 
 ### What the recipient knows
 
@@ -133,10 +143,10 @@ Issue kinds: `fused_words`, `broken_literal`, `dropped_words`,
 `symbol_shorthand`, `coined_abbreviation`, `status_chain`, `repetition`,
 `disorganised`.
 
-The line between 2 and 1 is whether the meaning comes back. Score 2 when every
-clause can be split and read with effort. Score 1 when, after splitting the
-words, something the recipient must act on still cannot be interpreted. Judge
-by the worst passage the recipient has to act on, not by the average.
+The line between `costly` and `broken` is whether the meaning comes back. An
+issue is `costly` when the quoted passage can be split and read with effort.
+It is `broken` when, after splitting the words, something the recipient must
+act on still cannot be interpreted.
 
 ### Examples at each score
 
@@ -152,13 +162,15 @@ These are fragments of real handoffs with names, numbers and hashes replaced.
 | **1** | `Ifstillrunningreportactualcurrentphaseonlyforfairhandoff, no clockETAconsent` | The first half splits. "no clockETAconsent" is an instruction, and after splitting it still has no clear meaning. |
 | **1** | `NewUSER<=20min two300s16CPUbreakerOFF/ONperformancewindowreserved` | The recipient must act on a time window, two trials, a CPU count and a breaker state, and cannot tell which number belongs to which. |
 
-A fragment that would score 2 for effort scores 1 when the unclear part is
-something the recipient has to act on. If you have to write `[unclear: …]` in
-the rewrite for an instruction, a value to copy or a condition, the score is 1.
+A passage that would be `costly` for effort is `broken` when the unclear part
+is something the recipient has to act on. If you have to write `[unclear: …]`
+in the rewrite for an instruction, a value to copy or a condition, that issue
+is `broken`.
 
 ### Show the rewrite
 
-When presentation scores 1 or 2, write the message again in plain English.
+When presentation has a `costly` or `broken` issue, write the message again in
+plain English.
 Rewrite the whole message when it is 1,500 characters or fewer. For a longer
 one, rewrite the passage that carries the main ask, up to about 1,000
 characters, and quote the passage you replaced. A rewrite is a full version,
@@ -208,22 +220,27 @@ record RUN`:
   "situation": "One or two sentences on what work is underway and what the recipient can know.",
   "intent": {
     "statement": "What the sender wants this recipient to do, answer, decide or know.",
-    "score": 4,
-    "reason": "Why this score.",
-    "issues": []
+    "issues": [],
+    "reason": "One or two sentences summing up the question."
   },
   "content": {
-    "score": 2,
-    "reason": "Why this score.",
     "issues": [
-      { "kind": "private_reference", "quote": "exact text", "effect": "what the recipient must guess", "repair": "what to write instead" }
-    ]
+      { "kind": "private_reference", "severity": "costly", "quote": "exact text", "effect": "what the recipient must guess", "repair": "what to write instead" }
+    ],
+    "reason": "One or two sentences summing up the question."
   },
-  "presentation": { "score": 4, "reason": "Why this score.", "issues": [] },
+  "presentation": { "issues": [], "reason": "Plain sentences throughout." },
   "rewrite": { "of": "exact passage replaced, or omit for the whole message", "text": "Plain-English version." }
 }
 ```
 
+- Write each question's `issues` before its `reason`. The reason sums up the
+  issues; it does not overrule them.
+- There is no `score` field. The recorder computes each score from the issues
+  and prints it back.
+- `severity` is `minor`, `costly` or `broken`.
+- A question the context cannot settle is written as
+  `{ "unknown": true, "issues": [], "reason": "why it cannot be judged" }`.
 - `exchange.sender` and `exchange.recipient` are one of `coordinator`,
   `implementer`, `reviewer`, `researcher`, `tester`, `human`, `system`,
   `unknown`. Use `system` for a notice the harness wrote, such as "background
@@ -233,5 +250,7 @@ record RUN`:
 - `quote` must be an exact substring of the message. It may be empty only for
   kinds that describe something absent: `no_ask`, `no_done_condition` and
   `missing_essential`.
-- `rewrite` is required when `presentation.score` is 1 or 2, and optional
-  otherwise.
+- `rewrite` is required when presentation has a `costly` or `broken` issue, and
+  optional otherwise.
+- Reviews recorded before `handoff-v9` carry a reviewer-written `score` on each
+  question and no severities. Tools read that score as it stands.

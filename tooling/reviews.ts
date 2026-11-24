@@ -17,7 +17,7 @@ import {
 } from "./shared.ts";
 import { createRun, put, records } from "./research-store.ts";
 import type { Split } from "./analysis.ts";
-export const RUBRIC_VERSION = "handoff-v8";
+export const RUBRIC_VERSION = "handoff-v9";
 export const ROLES = [
   "coordinator",
   "implementer",
@@ -71,16 +71,25 @@ export const WHOLE_REWRITE_CHARACTERS = 1500;
 const ABSENT = new Set(["no_ask", "no_done_condition", "missing_essential"]);
 export type Dimension = keyof typeof ISSUE_KINDS;
 export const DIMENSIONS = Object.keys(ISSUE_KINDS) as Dimension[];
+/** What one issue does to the recipient, and the score it sets. */
+export const SEVERITIES = { minor: 3, costly: 2, broken: 1 } as const;
+export type Severity = keyof typeof SEVERITIES;
 export interface Issue {
   kind: string;
+  /** Absent only in reviews recorded before handoff-v9. */
+  severity?: Severity;
   quote: string;
   effect: string;
   repair: string;
 }
-export interface Score {
-  score: number | null;
-  reason: string;
+/** A reviewer's answer to one of the three questions. */
+export interface Finding {
   issues?: Issue[];
+  reason: string;
+  /** The context cannot settle this question. */
+  unknown?: boolean;
+  /** Reviewer-written score, present only in reviews recorded before handoff-v9. */
+  score?: number | null;
 }
 export interface Review {
   message_id: string;
@@ -88,24 +97,55 @@ export interface Review {
   full_message_reviewed: true;
   exchange: { sender: string; recipient: string; type: string };
   situation: string;
-  intent: Score & { statement: string };
-  content: Score;
-  presentation: Score;
+  intent: Finding & { statement: string };
+  content: Finding;
+  presentation: Finding;
   rewrite?: { of?: string; text: string };
 }
-export type Verdict = "send" | "revise" | "rewrite" | "unknown";
-/** Derived from the scores; reviewers never judge it separately. */
-export function verdict(
-  review: Record<Dimension, { score: number | null }>,
-): Verdict {
-  const scores = DIMENSIONS.map((d) => review[d]?.score).filter(
-    (n): n is number => typeof n === "number",
+/**
+ * The score for one question, 1 to 4, or null when it is unknown. Reviewers do
+ * not write scores: it is the worst severity among the issues, and 4 with
+ * none. Reviews from before handoff-v9 carry a written score, used as it is.
+ */
+export function score(finding: Finding | undefined): number | null {
+  if (!finding) return null;
+  if (finding.score !== undefined) return finding.score;
+  if (finding.unknown) return null;
+  const values = (finding.issues ?? []).map(
+    (issue) => SEVERITIES[issue.severity as Severity] ?? 4,
   );
-  if (!scores.length) return "unknown";
-  const lowest = Math.min(...scores);
-  if (lowest <= 2) return lowest === 2 ? "revise" : "rewrite";
-  // A missing score could have been a 1 or a 2, so the rest cannot clear it.
-  return scores.length === DIMENSIONS.length ? "send" : "unknown";
+  return values.length ? Math.min(...values) : 4;
+}
+export function scores(
+  review: Partial<Record<Dimension, Finding>>,
+): Record<Dimension, number | null> {
+  return Object.fromEntries(
+    DIMENSIONS.map((d) => [d, score(review[d])]),
+  ) as Record<Dimension, number | null>;
+}
+/**
+ * The lowest score and the questions it came from. The score is null when the
+ * message cannot be judged: an unknown question cannot be cleared by the other
+ * two, so one unknown with nothing below 3 leaves the whole message unknown.
+ */
+export function lowest(review: Partial<Record<Dimension, Finding>>): {
+  score: number | null;
+  questions: Dimension[];
+} {
+  const all = scores(review);
+  const known = DIMENSIONS.filter((d) => all[d] !== null);
+  if (!known.length) return { score: null, questions: [] };
+  const least = Math.min(...known.map((d) => all[d]!));
+  if (least > 2 && known.length < DIMENSIONS.length)
+    return { score: null, questions: [] };
+  return { score: least, questions: known.filter((d) => all[d] === least) };
+}
+/** True when the lowest score is 1 or 2, null when the message is unknown. */
+export function needsWork(
+  review: Partial<Record<Dimension, Finding>>,
+): boolean | null {
+  const { score: least } = lowest(review);
+  return least === null ? null : least <= 2;
 }
 interface Stratum {
   legacy_reviewed?: boolean;
@@ -129,8 +169,11 @@ export function sampleReview(
   reviewer: string,
   configPath = resolve(ROOT, "config/review.json"),
   mix?: Record<string, number>,
+  /** Draw this slice of the fair sample again, for a second rating. */
+  rerate?: { start: number; count: number },
 ) {
   const config = parse<ReviewConfig>(readFileSync(configPath, "utf8"));
+  if (rerate) mix = { [RERATE]: rerate.count };
   mix ??= { random: n };
   const total = Object.values(mix).reduce((a, b) => a + b, 0);
   invariant(
@@ -179,7 +222,21 @@ export function sampleReview(
         ),
       );
     const chosen: { row: (typeof rows)[number]; stratum: string }[] = [];
-    for (const [name, count] of Object.entries(mix)) {
+    if (rerate) {
+      const fair = probabilitySample(db, configPath);
+      invariant(fair, "The fair sample is not fully reviewed yet");
+      const slice = fair.slice(rerate.start, rerate.start + rerate.count);
+      invariant(
+        Number.isInteger(rerate.start) &&
+          rerate.start >= 0 &&
+          slice.length === rerate.count,
+        "Slice lies outside the fair sample",
+      );
+      const byId = new Map(rows.map((r) => [r.message_id, r]));
+      for (const id of slice)
+        chosen.push({ row: byId.get(id)!, stratum: RERATE });
+    }
+    for (const [name, count] of rerate ? [] : Object.entries(mix)) {
       const stratum = name === "random" ? {} : config.strata?.[name];
       invariant(stratum, "Unknown stratum: " + name);
       const pool = rows.filter(
@@ -254,10 +311,15 @@ export function probabilitySample(
       .all<{ message_id: string; record_json: string }>(
         "SELECT r.message_id,r.record_json FROM analysis_records r JOIN analysis_runs a USING(run_id) WHERE a.kind='manual-review' AND r.kind='sample'",
       )
-      .map((r) => [
-        r.message_id,
-        parse<{ stratum?: string }>(r.record_json).stratum ?? "random",
-      ]),
+      .map(
+        (r) =>
+          [
+            r.message_id,
+            parse<{ stratum?: string }>(r.record_json).stratum ?? "random",
+          ] as const,
+      )
+      // A second rating draws a message again; its first draw says how it was picked.
+      .filter(([, stratum]) => stratum !== RERATE),
   );
   const order = db
     .all<{ message_id: string }>(
@@ -271,6 +333,8 @@ export function probabilitySample(
   const head = order.slice(0, last + 1);
   return head.every((id) => sampled.has(id)) ? head : null;
 }
+/** Stratum name for a message drawn again so that a second reviewer can score it. */
+export const RERATE = "rerate";
 const text = (v: unknown): v is string => typeof v === "string" && !!v.trim();
 export function recordReview(
   db: ResearchDatabase,
@@ -312,23 +376,25 @@ export function recordReview(
   );
   for (const key of DIMENSIONS) {
     const value = record[key];
+    invariant(value && text(value.reason), `${key}: give a reason`);
     invariant(
-      value &&
-        text(value.reason) &&
-        (value.score === null ||
-          (Number.isInteger(value.score) &&
-            value.score >= 1 &&
-            value.score <= 4)),
-      `${key}: use score 1–4 or null, with a reason`,
+      value.score === undefined,
+      `${key}: remove "score"; it is computed from the severity of each issue`,
     );
     invariant(
-      value.score === null || value.score === 4 || value.issues?.length,
-      `${key}: a score below 4 needs at least one issue`,
+      value.unknown === undefined ||
+        (typeof value.unknown === "boolean" &&
+          !(value.unknown && value.issues?.length)),
+      `${key}: an unknown question has no issues`,
     );
     for (const issue of value.issues ?? []) {
       invariant(
         (ISSUE_KINDS[key] as readonly string[]).includes(issue.kind),
         `${key}: unknown issue kind ${issue.kind}; use one of ${ISSUE_KINDS[key].join(", ")}`,
+      );
+      invariant(
+        Object.hasOwn(SEVERITIES, String(issue.severity)),
+        `${key}: ${issue.kind} needs a severity of ${Object.keys(SEVERITIES).join(", ")}`,
       );
       invariant(
         text(issue.effect) && text(issue.repair),
@@ -343,11 +409,10 @@ export function recordReview(
       );
     }
   }
-  const low =
-    record.presentation.score !== null && record.presentation.score <= 2;
+  const presentation = score(record.presentation);
   invariant(
-    !low || text(record.rewrite?.text),
-    "presentation 1 or 2 needs a plain-English rewrite",
+    presentation === null || presentation > 2 || text(record.rewrite?.text),
+    "a costly or broken presentation issue needs a plain-English rewrite",
   );
   if (record.rewrite !== undefined) {
     const { of, text: rewritten } = record.rewrite;
@@ -370,7 +435,11 @@ export function recordReview(
   db.transaction(() =>
     put(db, run, "review", record.message_id, record, record.message_id),
   );
-  return { recorded: record.message_id, verdict: verdict(record) };
+  return {
+    recorded: record.message_id,
+    scores: scores(record),
+    lowest: lowest(record),
+  };
 }
 const DELIMITER = "=".repeat(72);
 /**

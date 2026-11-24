@@ -112,10 +112,25 @@ then trimmed context. Packets hold real message text, so they go under ignored
 `data/` and are deleted after the run.
 
 `record` reads one JSON review from standard input and validates it against
-[the rubric](communication-rubric.md), which defines the record format. It
-rejects quotes that are not exact substrings of the message, unknown issue
-kinds, scores below 4 without an issue, and a presentation score of 1 or 2
-without a rewrite. Each review is immutable.
+[the rubric](communication-rubric.md), which defines the record format. A
+review lists issues with a severity each and carries no scores: the recorder
+computes them and prints them back. It rejects a written `score`, an issue
+without a severity, a quote that is not an exact substring of the message, an
+unknown issue kind, and a costly or broken presentation issue without a full
+rewrite. Each review is immutable.
+
+To have a second reviewer score messages that are already reviewed, draw a
+slice of the fair sample again:
+
+```sh
+node scripts/handoff.ts review sample second-rating-01 --reviewer gemini-4-neon --rerate 0:14
+```
+
+`--rerate START:COUNT` takes that slice of the fair sample in its fixed order.
+The draw is recorded with stratum `rerate` and does not change how the message
+was first picked. `config/review.json` names the `reference_reviewer`; figures
+use that reviewer's review under the newest rubric version, and other reviews
+of the same message are second ratings.
 
 Signal-specific calibration uses [its own commands](style-signals-calibration.md).
 The abandoned file-oriented review CLIs and working-file archive have been removed.

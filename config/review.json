@@ -3,6 +3,7 @@
   "seed": 20261123,
   "scope": "handoff_inputs",
   "rubric": "docs/communication-rubric.md",
+  "reference_reviewer": "claude-opus-5-5",
   "strata": {
     "pilot": { "legacy_reviewed": true },
     "fused": { "min_longest_run": 25 },

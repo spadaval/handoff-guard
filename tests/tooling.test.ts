@@ -52,7 +52,9 @@ import {
   recordReview,
   writePackets,
   probabilitySample,
-  verdict,
+  lowest,
+  needsWork,
+  score,
   insertLegacyReview,
   type Review,
 } from "../tooling/reviews.ts";
@@ -588,22 +590,52 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       situation: "An invented task is underway.",
       intent: {
         statement: "Check a fixture.",
-        score: 4,
+        issues: [],
         reason: "The ask is the first sentence.",
       },
-      content: { score: null, reason: "Recipient access is unknown." },
-      presentation: { score: 4, reason: "Ordinary instruction." },
+      content: {
+        unknown: true,
+        issues: [],
+        reason: "Recipient access is unknown.",
+      },
+      presentation: { issues: [], reason: "Ordinary instruction." },
     };
-    // Content is null, so the two 4s cannot clear the message.
-    assert.equal(recordReview(f.db, "review", r).verdict, "unknown");
-    assert.equal(
-      verdict({
-        intent: { score: 4 },
-        content: { score: 3 },
-        presentation: { score: 4 },
+    const issue = {
+      kind: "fused_words",
+      severity: "minor" as const,
+      quote: data.text.slice(0, 5),
+      effect: "The reader must split the words.",
+      repair: "Add spaces.",
+    };
+    const fused = (extra: object) => ({
+      issues: [{ ...issue, ...extra }],
+      reason: "Fused.",
+    });
+    // Scores are computed from severities, and an unknown question cannot be
+    // cleared by the other two.
+    const recorded = recordReview(f.db, "review", r);
+    assert.deepEqual(recorded.scores, {
+      intent: 4,
+      content: null,
+      presentation: 4,
+    });
+    assert.deepEqual(recorded.lowest, { score: null, questions: [] });
+    assert.deepEqual(
+      lowest({
+        intent: fused({ kind: "buried_ask" }),
+        content: { unknown: true, reason: "" },
+        presentation: fused({ severity: "broken" }),
       }),
-      "send",
+      { score: 1, questions: ["presentation"] },
     );
+    assert.equal(needsWork({ ...r, content: r.presentation }), false);
+    assert.equal(
+      needsWork({ ...r, presentation: fused({ severity: "costly" }) }),
+      true,
+    );
+    assert.equal(needsWork(r), null);
+    // A review from before handoff-v9 keeps the score its reviewer wrote.
+    assert.equal(score({ score: 2, reason: "", issues: [issue] }), 2);
     assert.throws(
       () => recordReview(f.db, "review", { ...r, message_id: "unknown" }),
       /outside/,
@@ -614,19 +646,21 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
           ...r,
           presentation: { score: 3, reason: "Needs revision." },
         }),
-      /needs at least one issue/,
+      /remove "score"/,
     );
-    const issue = {
-      kind: "fused_words",
-      quote: "not in the message at all",
-      effect: "The reader must split the words.",
-      repair: "Add spaces.",
-    };
     assert.throws(
       () =>
         recordReview(f.db, "review", {
           ...r,
-          presentation: { score: 3, reason: "Fused.", issues: [issue] },
+          presentation: fused({ severity: undefined }),
+        }),
+      /needs a severity/,
+    );
+    assert.throws(
+      () =>
+        recordReview(f.db, "review", {
+          ...r,
+          presentation: fused({ quote: "not in the message at all" }),
         }),
       /exact substring/,
     );
@@ -634,11 +668,7 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       () =>
         recordReview(f.db, "review", {
           ...r,
-          presentation: {
-            score: 3,
-            reason: "Wrong list.",
-            issues: [{ ...issue, kind: "no_ask", quote: "" }],
-          },
+          presentation: fused({ kind: "no_ask", quote: "" }),
         }),
       /unknown issue kind/,
     );
@@ -646,32 +676,42 @@ test("manual reviews bind frozen IDs, contexts, evidence and anchored score repa
       () =>
         recordReview(f.db, "review", {
           ...r,
-          presentation: {
-            score: 2,
-            reason: "Fused.",
-            issues: [{ ...issue, quote: data.text.slice(0, 5) }],
-          },
+          content: { unknown: true, ...fused({ kind: "duplication" }) },
         }),
-      /rewrite/,
+      /has no issues/,
     );
-    assert.equal(
-      verdict({
-        intent: { score: 4 },
-        content: { score: 1 },
-        presentation: { score: null },
-      }),
-      "rewrite",
+    const low = fused({ severity: "costly" });
+    assert.throws(
+      () => recordReview(f.db, "review", { ...r, presentation: low }),
+      /rewrite/,
     );
     assert.throws(
       () => sampleReview(f.db, "second", 1, "synthetic"),
       /exceeds stratum/,
     );
     assert.deepEqual(probabilitySample(f.db), [sample.message_id]);
-    const low = {
-      score: 2,
-      reason: "Fused.",
-      issues: [{ ...issue, quote: data.text.slice(0, 5) }],
-    };
+    // A second rating draws the same message again without changing the fair sample.
+    sampleReview(f.db, "second-rating", 0, "another", undefined, undefined, {
+      start: 0,
+      count: 1,
+    });
+    assert.deepEqual(
+      records<{ message_id: string; stratum: string }>(
+        f.db,
+        "second-rating",
+        "sample",
+      ).map((x) => [x.message_id, x.stratum]),
+      [[sample.message_id, "rerate"]],
+    );
+    assert.deepEqual(probabilitySample(f.db), [sample.message_id]);
+    assert.throws(
+      () =>
+        sampleReview(f.db, "third", 0, "another", undefined, undefined, {
+          start: 1,
+          count: 1,
+        }),
+      /outside the fair sample/,
+    );
     assert.throws(
       () =>
         recordReview(f.db, "review", {

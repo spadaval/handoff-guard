@@ -46,7 +46,7 @@ split                      Freeze thread-component tuning/heldout assignments on
 evaluate                   Evaluate every body with the compiled Rust guard.
 mechanics                  Store compiled diagnostics for handoff inputs.
 calibrate prepare|show|label|summarize --run RUN [--split tuning|heldout]
-review sample RUN --reviewer NAME [--count 30 | --mix pilot:3,random:6]
+review sample RUN --reviewer NAME [--count 30 | --mix pilot:3,random:6 | --rerate START:COUNT]
 review packet RUN --out DIR  Write one reading packet per sampled message (ignored path).
 review record RUN          Read one manual review JSON record from stdin.
 review runs                List saved runs.
@@ -74,6 +74,7 @@ export async function main(args = process.argv.slice(2)) {
       "baseline-run": { type: "string", default: "pre-style-signals-policy" },
       count: { type: "string", default: "30" },
       mix: { type: "string" },
+      rerate: { type: "string" },
       out: { type: "string" },
       reviewer: { type: "string" },
       key: { type: "string" },
@@ -237,6 +238,12 @@ export async function main(args = process.argv.slice(2)) {
                     return [name, Number(count)];
                   }),
                 )
+              : undefined,
+            v.rerate
+              ? {
+                  start: Number(v.rerate.split(":")[0]),
+                  count: Number(v.rerate.split(":")[1]),
+                }
               : undefined,
           );
         } else if (action === "packet") {
