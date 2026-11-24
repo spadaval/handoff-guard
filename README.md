@@ -39,18 +39,20 @@ Python, Node, or another separately installed interpreter.
 ```sh
 cargo build --release --locked
 cargo test --locked
-python3 -m unittest discover -s tests -v
-python3 scripts/validate_corpus.py
-python3 scripts/evaluate_corpus.py evaluate
-python3 scripts/test_codex_hook.py --scenario denied
-python3 scripts/test_codex_hook.py --scenario normal
-python3 scripts/test_codex_hook.py --scenario startup-error
-python3 scripts/test_codex_hook.py --scenario timeout
-python3 scripts/test_codex_hook.py --scenario exit-one
+npm ci
+npm run check
+npm test
+node scripts/handoff.ts validate
+node scripts/handoff.ts evaluate
+node scripts/handoff.ts hook-test --scenario denied
+node scripts/handoff.ts hook-test --scenario normal
+node scripts/handoff.ts hook-test --scenario startup-error
+node scripts/handoff.ts hook-test --scenario timeout
+node scripts/handoff.ts hook-test --scenario exit-one
 ```
 
-Python is only used for offline corpus preparation and the integration test
-harness. Integration tests use the actual installed `codex` executable, a
+Node 24.13 runs the TypeScript research tools and integration harness. Rust
+remains the standalone installed hook. Integration tests use the actual installed `codex` executable, a
 loopback scripted Responses server, a fresh child session and a temporary
 `CODEX_HOME`. They make no remote model requests. They neither read nor modify
 the active Codex configuration. Integration fixtures use temporary files and print their results without retaining traces.
@@ -93,6 +95,22 @@ one-second hook timeouts permitted delivery in the integration tests. A valid
 JSON `permissionDecision: "deny"` blocked delivery. This is a quality guard,
 not a sandbox or security boundary.
 
+## TypeScript research tooling
+
+Run `npm ci` at the repository root, then `npm run handoff -- --help` for the CLI.
+Node is pinned to 24.13.0, matching the dashboard service. It runs TypeScript
+directly; there is no Python runtime or application build step for these tools.
+
+`tooling/db/schema.ts` defines the shared Drizzle model. The CLI and dashboard
+API use `tooling/db/connection.ts` for SQLite access and decoding. Schema and
+migration files are tracked; messages and results remain ignored. The current
+`node:sqlite` integration uses matching, pinned Drizzle ORM/Kit release candidates.
+
+This migration preserves the current TEXT/JSON and compressed-provenance formats.
+It does not convert stored data to JSONB or change hook policy. Query-builder types
+check database operations; explicit runtime checks still validate imported records
+and model assessments.
+
 ## Corpus work
 
 Controls stay as files: [config/](config/), [the rubric](docs/communication-rubric.md),
@@ -101,11 +119,11 @@ provenance, recovered context, labels, samples, diagnostics and every derived
 result stay in `data/handoffs.sqlite3`. This includes aggregate reports.
 
 ```sh
-python3 scripts/context_database.py validate
-python3 scripts/evaluate_corpus.py evaluate --labels labels-full.jsonl
-python3 scripts/analyze_mechanics.py
-python3 scripts/research.py runs
-python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
+node scripts/handoff.ts validate
+node scripts/handoff.ts evaluate --labels labels-full.jsonl
+node scripts/handoff.ts mechanics
+node scripts/handoff.ts review runs
+node scripts/handoff.ts calibrate summarize --run style-signals-v3
 ```
 
 These commands use SQLite directly. They create no corpus export or experiment
@@ -139,8 +157,8 @@ SQLite is the single local analysis store at `data/handoffs.sqlite3`. The agreed
 diagnostics:
 
 ```sh
-python3 scripts/context_database.py validate
-python3 scripts/analyze_mechanics.py
+node scripts/handoff.ts validate
+node scripts/handoff.ts mechanics
 ```
 
 The dashboard reads SQLite through a read-only API in the existing Artifact Hub

@@ -2,7 +2,7 @@
 
 There are two kinds of project material:
 
-- **Tracked files:** Rust and Python code, dashboard source, configuration in
+- **Tracked files:** Rust and TypeScript code, dashboard source, configuration in
   `config/`, rubrics, review instructions and documentation about using the tools.
 - **Ignored SQLite database:** exact messages, provenance, recovered context,
   frozen sample/split assignments, human/model labels, scores, diagnostics,
@@ -23,17 +23,16 @@ superseded diagnostics and duplicate evaluations have been removed. Canonical
 labels, contextual reviews, frozen splits and the policy baseline remain.
 
 ```sh
-python3 scripts/context_database.py validate
-python3 scripts/research.py runs
-python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
+node scripts/handoff.ts validate
+node scripts/handoff.ts review runs
+node scripts/handoff.ts calibrate summarize --run style-signals-v3
 ```
 
-Use `scripts/compact_database.py` to prune obsolete runs and reclaim freed pages.
+Use `node scripts/handoff.ts compact` to prune obsolete runs and reclaim freed pages.
 Stop the dashboard service before running maintenance on its live database.
 
-To capture a different corpus, use `scripts/export_corpus.py --database PATH`
-with a **new** database path. Extraction uses temporary files which are imported
-and removed automatically. Existing samples, labels and splits are never replaced.
+To capture a different corpus, use `node scripts/handoff.ts capture --database PATH`
+with a **new** database path. Capture writes directly to SQLite without intermediate CSV or JSONL files. Existing samples, labels and splits are never replaced.
 See [database operations](../docs/context-database.md).
 
 No real messages, excerpts, derived labels, charts, reports or aggregate results

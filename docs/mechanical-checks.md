@@ -7,7 +7,7 @@ measures every check; delivery still uses the existing early size rejection.
 
 ```sh
 cargo build --release --locked
-python3 scripts/analyze_mechanics.py
+node scripts/handoff.ts mechanics
 ```
 
 The analyzer stores compiled diagnostics for all distinct handoff input bodies in

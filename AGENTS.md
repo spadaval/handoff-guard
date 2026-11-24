@@ -12,7 +12,7 @@ particular headings, or an Atelier-specific task line.
   database: context, labels, scores, samples, diagnostics and reports, including
   aggregates. Do not add loose durable data exports or experiment directories.
 - Never commit real corpus text or copy it into fixtures. Use invented examples.
-- Corpus preparation scripts may use Python's standard library. The installed
+- Use TypeScript and the shared Drizzle database layer for research tooling. The installed
   hook should not require Python or another separately installed interpreter.
 - Test the compiled executable and its actual Codex hook integration before
   claiming that installation blocks handoffs.

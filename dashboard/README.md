@@ -43,9 +43,10 @@ The only Hub configuration change made for this application is this plugin impor
 and registration; no package or service changes are required.
 
 Open <http://ai-assistant-ia:5173/artifacts/handoff-context-review/>. A missing
-database produces an explicit retryable error. Supply the local SQLite database separately from Git.
-`python3 scripts/context_database.py collect` resumes recovery and
-`python3 scripts/analyze_mechanics.py` stores compiled measurements. See
+database produces an explicit retryable error. Run `npm ci` in `/root/handoff-guard` to install its pinned Drizzle dependencies.
+Supply the local SQLite database separately from Git.
+`node scripts/handoff.ts collect` resumes recovery and
+`node scripts/handoff.ts mechanics` stores compiled measurements. See
 [the database guide](../docs/context-database.md) for capture and maintenance.
 
 ## Edit and inspect
@@ -64,4 +65,4 @@ layout, context, source excerpts, scores and role icons. Check short and long
 messages, evidence expansion and narrow windows. Use a temporary ignored location for any real-message screenshots and discard
 them after visual review. Do not create another durable data directory.
 
-The repository's Rust, Python and API tests cover backend behavior separately.
+The repository's Rust, TypeScript and API tests cover backend behavior separately.

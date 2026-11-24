@@ -1,0 +1,26 @@
+{
+  "name": "handoff-guard-tooling",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.13.0 <25"
+  },
+  "scripts": {
+    "handoff": "node scripts/handoff.ts",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/handoff.ts migrate"
+  },
+  "dependencies": {
+    "drizzle-orm": "1.0.0-rc.6"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "drizzle-kit": "1.0.0-rc.6",
+    "typescript": "5.9.3"
+  },
+  "volta": {
+    "node": "24.13.0"
+  }
+}

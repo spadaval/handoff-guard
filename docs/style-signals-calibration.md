@@ -7,12 +7,12 @@ the ignored SQLite database.
 
 ```sh
 cargo build --release --locked
-python3 scripts/calibrate_style_signals.py prepare --run my-calibration
-python3 scripts/calibrate_style_signals.py show --run my-calibration --split tuning
-python3 scripts/calibrate_style_signals.py label --run my-calibration --split tuning < /dev/stdin
-python3 scripts/calibrate_style_signals.py show --run my-calibration --split heldout
-python3 scripts/calibrate_style_signals.py label --run my-calibration --split heldout < /dev/stdin
-python3 scripts/calibrate_style_signals.py summarize --run my-calibration
+node scripts/handoff.ts calibrate prepare --run my-calibration
+node scripts/handoff.ts calibrate show --run my-calibration --split tuning
+node scripts/handoff.ts calibrate label --run my-calibration --split tuning < /dev/stdin
+node scripts/handoff.ts calibrate show --run my-calibration --split heldout
+node scripts/handoff.ts calibrate label --run my-calibration --split heldout < /dev/stdin
+node scripts/handoff.ts calibrate summarize --run my-calibration
 ```
 
 Preparation compares the compiled guard's full-corpus rule/reason predictions
@@ -36,10 +36,9 @@ sample or one heldout component cannot justify promotion to a blocking rule.
 Earlier runs can be inspected without recreating their working folders:
 
 ```sh
-python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
-python3 scripts/research.py records style-signals-v3 label
+node scripts/handoff.ts calibrate summarize --run style-signals-v3
+node scripts/handoff.ts review records style-signals-v3 label
 ```
 
-All measurements,
-findings and reports, including aggregates, stay out of Git. This document
+All measurements, findings and reports, including aggregates, stay out of Git. This document
 defines the procedure rather than carrying results.

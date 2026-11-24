@@ -1,6 +1,6 @@
 > Historical review guidance. The earlier file-oriented CLIs are retired.
 > For current grades use `docs/communication-rubric.md`; create frozen samples
-> and record manual decisions with `scripts/research.py`. Data stays in SQLite.
+> and record manual decisions with `node scripts/handoff.ts review`. Data stays in SQLite.
 
 # Blind full-message readability review with 6.1 Sol
 

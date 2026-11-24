@@ -12,13 +12,13 @@ No export or publishing step is required after a database update.
 ## Use the existing dataset
 
 ```sh
-python3 scripts/context_database.py validate
-python3 scripts/validate_corpus.py
-python3 scripts/context_database.py collect
-python3 scripts/analyze_mechanics.py
-python3 scripts/evaluate_corpus.py evaluate --labels labels-full.jsonl
-python3 scripts/calibrate_style_signals.py summarize --run style-signals-v3
-python3 scripts/research.py runs
+node scripts/handoff.ts migrate
+node scripts/handoff.ts validate
+node scripts/handoff.ts collect
+node scripts/handoff.ts mechanics
+node scripts/handoff.ts evaluate --labels labels-full.jsonl
+node scripts/handoff.ts calibrate summarize --run style-signals-v3
+node scripts/handoff.ts review runs
 ```
 
 `collect` resumes context recovery in an existing database. It does not require
@@ -36,18 +36,17 @@ untouched test set merely because its split assignment was retained.
 ## Capture another dataset
 
 ```sh
-python3 scripts/export_corpus.py --database data/new-capture.sqlite3
-python3 scripts/context_database.py collect --database data/new-capture.sqlite3
-python3 scripts/evaluate_corpus.py prepare --database data/new-capture.sqlite3
+node scripts/handoff.ts capture --database data/new-capture.sqlite3
+node scripts/handoff.ts split --database data/new-capture.sqlite3
 ```
 
-Extraction uses a temporary directory, imports exact records and source hashes
-into the new database, and removes the temporary files. An existing destination
-is refused. `prepare` freezes connected-thread components and refuses to replace
+Capture writes exact bodies and recorded observations directly into a new
+database, without a directory of intermediate exports. An existing destination
+is refused. `split` freezes connected-thread components and refuses to replace
 an existing split. The heldout hash partition is configured in `config/review.json`.
 Never tune a rule before freezing its split.
 
-The collector reads local T3 projections, Codex history/rollouts and evidence
+The TypeScript collector reads local T3 projections, Codex history/rollouts and evidence
 caches. Recorded tool arguments are evidence. It never executes recorded commands
 or JavaScript, fetches remote references, changes historical stores or modifies
 active Codex configuration. Input kinds include assignments, messages, followup
@@ -73,9 +72,9 @@ path, with explicit recovery gaps.
   and a compact integer ID. `evidence_records` and `reference_records` retain
   individual provenance/visibility and reference shared text. Their repetitive
   metadata is compressed. The `evidence` and `context_references` views expose
-  the original logical records to Python and the dashboard. Open Python
-  connections through `context_database.connect` or `ro` so the decompressor is
-  registered. The dashboard API registers the equivalent reader itself.
+  the original logical records to the CLI and dashboard. Open connections through
+  `tooling/db/connection.ts`; it registers the decompressor and creates the shared
+  Drizzle query interface. Read-only API connections use the same module.
 - `source_files` keeps original import names, byte counts and checksums as
   provenance. Imported message/context records are validated directly; external
   exports and their archived copies are not needed.
@@ -88,10 +87,10 @@ caps record explicit omission counts. Contexts and bodies remain distinct.
 ## Review without working-file directories
 
 ```sh
-python3 scripts/research.py sample my-review --count 30 --reviewer sol
-python3 scripts/research.py records my-review sample
-python3 scripts/research.py message MESSAGE_ID --context CONTEXT_ID
-python3 scripts/research.py record my-review < /dev/stdin
+node scripts/handoff.ts review sample my-review --count 30 --reviewer sol
+node scripts/handoff.ts review records my-review sample
+node scripts/handoff.ts review message MESSAGE_ID --context CONTEXT_ID
+node scripts/handoff.ts review record my-review < /dev/stdin
 ```
 
 `sample` uses `config/review.json` and freezes IDs, split assignments, chosen
@@ -103,7 +102,7 @@ in `classification.task`, intent in `purpose.reason`, and
 `reason`. Scores below 5 require `issues` with an exact `quote`, `effect` and
 `repair`. Cite only evidence belonging to that context. Use the exact
 anchors and quote/repair requirements in [the rubric](communication-rubric.md).
-Each review is immutable. New manual runs are inspectable through `research.py`;
+Each review is immutable. New manual runs are inspectable through `handoff.ts review`;
 the dashboard's existing contextual pilot remains unchanged.
 
 Signal-specific calibration uses [its own commands](style-signals-calibration.md).
@@ -112,19 +111,27 @@ The abandoned file-oriented review CLIs and working-file archive have been remov
 ## Maintenance
 
 ```sh
-python3 scripts/compact_database.py
+node scripts/handoff.ts compact
 ```
 
 Stop Artifact Hub with its existing management CLI before maintaining the live
 database, then start it again afterwards. Do not create another server.
 
-Opening a v1 database migrates context text into shared storage transactionally.
-The migration compares complete logical-record fingerprints before committing.
-It preserves evidence IDs, references, text, provenance, visibility and links.
+The schema is declared in `tooling/db/schema.ts`. Reviewed SQL migrations and
+Drizzle snapshots live in `migrations/`, with `drizzle.config.ts` as configuration.
+`node scripts/handoff.ts migrate` applies those migrations. The existing normalized
+v2 database is adopted only if its complete schema matches the checked-in baseline;
+its research rows are not rewritten. Older database schemas are refused explicitly.
 
-Compaction removes the obsolete working-file archive, abandoned unlabeled
-calibration prototypes, fixture integration traces, superseded mechanical
-results and older complete evaluations of the same label source. It keeps the
+Use `npm run db:generate -- --name=DESCRIPTION` to propose a schema change. Review
+the generated SQL, including the custom views, triggers and WITHOUT ROWID tables,
+before applying it. Do not use schema push against the research dataset. The
+baseline includes the existing storage objects that the query-builder schema
+cannot express. Custom SQL remains appropriate for those objects and maintenance.
+
+The obsolete working-file archive has been removed. Compaction prunes abandoned
+unlabeled calibration prototypes, fixture traces, superseded mechanical results
+and older complete evaluations of the same label source. It keeps the
 newest available diagnostic per message, canonical reviews/labels, frozen splits
 and the old-policy baseline. All essential table fingerprints and the retained
 diagnostics are checked before committing. SQLite VACUUM then reclaims pages.
@@ -133,8 +140,8 @@ New calibration runs retain frozen sample measurements rather than another full
 copy of every inspection result. Integration fixtures do not append traces to
 the research database. Raw data and aggregate results remain out of Git.
 
-`context_database.py export --snapshot PATH` remains an explicit optional legacy
+`handoff.ts export --snapshot PATH` remains an explicit optional legacy
 export for outside tools. It is not part of the dashboard or normal workflow.
 Any such export is message data and must remain ignored. Database files use mode
-0600 and their data directory uses mode 0700. Use SQLite's backup API for backups
+0600 and new data directories are created with mode 0700. Use SQLite's backup API for backups
 while the dashboard has the database open.
