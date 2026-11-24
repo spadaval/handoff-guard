@@ -116,7 +116,7 @@
           <span class="score c{sc ?? 'null'}">{sc === null ? "Unknown" : `${sc} ${SCORE_NAMES[String(sc)]}`}</span>
         </header>
         <p class="how xs">
-          {#if how.unknown}The context cannot settle this question.{:else if how.written}Score written by the reviewer.{:else if how.decided_by === null}No issue, so 4 Clean.{:else}Set by the {s.issues?.[how.decided_by]?.severity} issue marked below.{/if}
+          {#if how.unknown}The context cannot settle this question.{:else if how.written}Score written by the reviewer.{:else if how.ungradeable.length}{how.ungradeable.length === 1 ? "An issue has" : `${how.ungradeable.length} issues have`} no valid severity, so this question cannot be scored.{:else if how.decided_by === null}No issue, so 4 Clean.{:else}Set by the {s.issues?.[how.decided_by]?.severity} issue marked below.{/if}
         </p>
         <p class="reason">{s.reason}</p>
         {#each s.issues ?? [] as issue, i}
@@ -126,7 +126,7 @@
             <div class="ih">
               <span class="kindline">
                 <a class="kind type" href={rubricHref(d)} title="{issue.kind} as defined in {review.rubric_version ?? 'the rubric'}">{issue.kind}</a>
-                {#if issue.severity}<span class="sev c{SEVERITY_SCORE[issue.severity] ?? 'null'}">{issue.severity}</span>{/if}
+                {#if how.ungradeable.includes(i)}<span class="sev cnull">{issue.severity ? `“${issue.severity}” is not a severity` : "no severity"}</span>{:else if issue.severity}<span class="sev c{SEVERITY_SCORE[issue.severity] ?? 'null'}">{issue.severity}</span>{/if}
                 {#if how.decided_by === i}<span class="sets">sets the score</span>{/if}
               </span>
               {#if m}

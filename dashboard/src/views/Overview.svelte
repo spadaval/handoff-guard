@@ -197,18 +197,32 @@
       {#if ov.drift}
       {@const d = ov.drift}
       {@const caught = ov.screening.blocked_low}
-      <p class="note lede">
-        Order each sender thread's handoffs by when they were sent and cut the thread into fifths. Across the {n(d.threads.length)} sender threads with at least {n(d.min_handoffs)} handoffs ({n(d.qualifying_handoffs)} handoffs), the share the hook blocks rises from
-        <strong class="num">{pct(d.pooled[0]?.hook_blocked?.p)}</strong> in the first fifth to <strong class="num">{pct(d.pooled.at(-1)?.hook_blocked?.p)}</strong> in the last.
-        In <strong class="num">{n(d.rising)}</strong> of the {n(d.threads.length)} threads the second half is at least 10 points higher than the first, and in {n(d.falling)} it is that much lower. Reviewed handoffs from {sampleName} show the same direction in their presentation scores, on small counts.
-      </p>
+      {@const ht = d.hook_trend}
+      {@const rt = d.review_trend}
+      {@const kn = (x: { k: number; n: number } | null) => (x ? `${n(x.k)} of ${n(x.n)}` : "")}
+      {#if !d.threads.length}
+        <p class="note lede">No sender thread has {n(d.min_handoffs)} or more handoffs with a recorded time, so there is no drift within a thread to show.</p>
+      {:else}
+        <p class="note lede">
+          Order each sender thread's handoffs by when they were sent and cut the thread into fifths. Across the {n(d.threads.length)} sender {d.threads.length === 1 ? "thread" : "threads"} with at least {n(d.min_handoffs)} handoffs ({n(d.qualifying_handoffs)} handoffs), the share the hook blocks
+          {#if ht.direction === "rises"}rises from{:else if ht.direction === "falls"}falls from{:else}shows no clear direction:{/if}
+          <strong class="num">{pct(ht.first?.p)}</strong> in the first fifth {#if ht.direction === "flat"}and{:else}to{/if} <strong class="num">{pct(ht.last?.p)}</strong> in the last.
+          The pooled figure counts every handoff once, so the largest threads weigh most.
+          In <strong class="num">{n(d.rising)}</strong> of the {n(d.threads.length)} threads the second half is at least 10 points higher than the first, and in <strong class="num">{n(d.falling)}</strong> it is that much lower.
+          {#if rt.direction === "rises" || rt.direction === "falls"}
+            Among reviewed handoffs from {sampleName}, the share with Costly or Broken presentation {ht.direction === rt.direction ? "also " : ""}{rt.direction === "rises" ? "rises" : "falls"}, from {kn(rt.first)} in the first fifth to {kn(rt.last)} in the last; the two intervals do not overlap.
+          {:else if rt.direction === "flat"}
+            Among reviewed handoffs from {sampleName}, the share with Costly or Broken presentation shows no clear direction: {kn(rt.first)} in the first fifth and {kn(rt.last)} in the last, with overlapping intervals.
+          {/if}
+        </p>
+      {/if}
       <p class="note limits">
         What this can and cannot show. Position within one sender's thread is the unit that shows the writing drifting; a mission or a calendar day mixes threads at different stages and hides it.
         The hook's block rate stands in for shorthand{#if caught}: it blocks {pct(caught.p)} of the handoffs reviewers score Costly or Broken on presentation, so it misses about {pct(1 - caught.p)} of them{/if}.
         {n(d.without_sender)} handoffs name no sender thread{#if d.without_time} and {n(d.without_time)} have no time{/if}, so they are left out.
         A later position means more handoffs sent, a longer session and more context, all at once: this shows that the writing drifts, not why.
       </p>
-      <Drift drift={d} {sampleName} {listSample} sparse={meta.sparse} />
+      {#if d.threads.length}<Drift drift={d} {sampleName} {listSample} sparse={meta.sparse} />{/if}
       {/if}
     </section>
 

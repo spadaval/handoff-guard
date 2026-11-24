@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { connect } from "node:net";
-import { createDashboardApi, wilson } from "../scripts/dashboard-api.ts";
+import { createDashboardApi, wilson, trend } from "../scripts/dashboard-api.ts";
 import { openDatabase } from "../tooling/db/connection.ts";
 import { probabilitySample } from "../tooling/reviews.ts";
 
@@ -347,14 +347,14 @@ test("detail returns exact text, every review with its scoring, live hook result
     ["run-c", "fixture-reviewer", "handoff-v9", true],
   ]);
   assert.deepEqual(body.reviews[0].lowest, { score: 2, questions: ["presentation"] });
-  assert.deepEqual(body.reviews[0].scoring.presentation, { written: true, unknown: false, decided_by: null });
+  assert.deepEqual(body.reviews[0].scoring.presentation, { written: true, unknown: false, decided_by: null, ungradeable: [] });
   assert.deepEqual(body.reviews[2].lowest, { score: 1, questions: ["presentation"] });
-  assert.deepEqual(body.reviews[2].scoring.presentation, { written: false, unknown: false, decided_by: 1 }, "the broken issue sets the score");
+  assert.deepEqual(body.reviews[2].scoring.presentation, { written: false, unknown: false, decided_by: 1, ungradeable: [] }, "the broken issue sets the score");
   assert.equal(body.reviews[2].needs_work, true);
   assert.equal(body.mission.key, "m-a");
   assert.deepEqual(body.picks.map((p: any) => p.picked), ["random", "rerate"]);
   const three = (await get("/messages/" + id(3))).body;
-  assert.deepEqual(three.reviews.at(-1).scoring.content, { written: false, unknown: true, decided_by: null });
+  assert.deepEqual(three.reviews.at(-1).scoring.content, { written: false, unknown: true, decided_by: null, ungradeable: [] });
   assert.equal(three.reviews.at(-1).needs_work, null);
   const one = (await get("/messages/" + id(1))).body;
   assert.equal(one.text, texts[1]);
@@ -513,45 +513,89 @@ test("an unreadable stored review is set aside without taking the API down", asy
   assert.equal(six.unreadable_reviews[0].run_id, "run-b");
 });
 
-test("drift orders each sender thread's handoffs and cuts it into fifths", async () => {
+test("drift sorts each sender thread by time, cuts uneven fifths and pools by handoff", async () => {
   const db = new DatabaseSync(path);
   const add = db.prepare("INSERT INTO messages VALUES(?,?,?,?,?,?,?)");
   const obs = db.prepare("INSERT INTO observations VALUES(?,?,?,?,?)");
   const hook = db.prepare("INSERT INTO mechanical_results VALUES(?,?,?)");
-  for (let k = 0; k < 40; k++) {
-    const m = id(100 + k);
-    const text = `Invented drift handoff number ${k}.`;
-    add.run(m, text, text.length, 5, JSON.stringify(["assignment"]), JSON.stringify(["Alpha"]), 1);
-    const at = new Date(Date.UTC(2026, 10, 10, 10, k)).toISOString();
-    // Half are recorded on the sender's own turn, half as deliveries naming the sender.
+  // Two sender threads of sizes that do not divide by five. Thread A's last
+  // fifth is blocked; thread B's first fifth is.
+  type Row = { thread: "a" | "b"; i: number };
+  const rows: Row[] = [
+    ...Array.from({ length: 37 }, (_, i) => ({ thread: "a" as const, i })),
+    ...Array.from({ length: 31 }, (_, i) => ({ thread: "b" as const, i })),
+  ];
+  // Message IDs and insertion order both disagree with time order.
+  const idOf = (r: Row) => id(100 + (((r.thread === "a" ? r.i : 37 + r.i) * 29) % 68));
+  const shuffled = rows.map((r, k) => ({ r, key: (k * 41) % 68 })).sort((x, y) => x.key - y.key).map((x) => x.r);
+  for (const r of shuffled) {
+    const m = idOf(r);
+    const text = `Invented drift handoff ${r.thread}-${r.i}.`;
+    add.run(m, text, text.length, 4, JSON.stringify(["assignment"]), JSON.stringify(["Alpha"]), 1);
+    const at = new Date(Date.UTC(2026, 10, r.thread === "a" ? 10 : 11, 10, r.i)).toISOString();
+    const sender = "thread-" + r.thread;
+    // Every sender-side source is used, and deliveries that name the sender.
+    const sources = ["t3_turn_items", "codex_history", "codex_rollout", "audit_cache"];
     const record =
-      k % 2 === 0
-        ? { source: "t3_turn_items", kind: "assignment", thread_id: "thread-s", thread_title: "Invented sender thread", timestamp: at }
-        : { source: "t3_messages", kind: "agent_delivery", thread_id: "recipient-r", sender_thread_id: "thread-s", thread_title: "Invented recipient", timestamp: at };
-    obs.run(`drift-${k}`, m, 1000 + k, record.source, JSON.stringify(record));
-    hook.run("mech-new", m, JSON.stringify(report(k >= 24, { glued: k >= 24 ? "block" : "pass" })));
+      r.i % 2 === 0
+        ? { source: sources[r.i % 4], kind: "assignment", thread_id: sender, thread_title: `Invented sender ${r.thread}`, timestamp: at }
+        : { source: "t3_messages", kind: "agent_delivery", thread_id: "recipient-r", sender_thread_id: sender, thread_title: "Invented recipient", timestamp: at };
+    obs.run(`drift-${r.thread}-${r.i}`, m, 1000 + rows.indexOf(r), record.source, JSON.stringify(record));
+    const blocked = r.thread === "a" ? r.i >= 30 : r.i <= 6;
+    hook.run("mech-new", m, JSON.stringify(report(blocked, { glued: blocked ? "block" : "pass" })));
   }
   // A delivery that names only its recipient's thread has no sender thread.
   add.run(id(200), "Invented orphan delivery.", 25, 3, JSON.stringify(["agent_delivery"]), JSON.stringify(["Alpha"]), 1);
-  obs.run("drift-orphan", id(200), 2000, "t3_messages", JSON.stringify({ source: "t3_messages", kind: "agent_delivery", thread_id: "recipient-r", timestamp: "2026-11-10T12:00:00Z" }));
+  obs.run("drift-orphan", id(200), 3000, "t3_messages", JSON.stringify({ source: "t3_messages", kind: "agent_delivery", thread_id: "recipient-r", timestamp: "2026-11-10T12:00:00Z" }));
   db.close();
   const d = (await get("/overview?sample=all")).body.drift;
-  assert.equal(d.with_sender_and_time, 40);
+  assert.equal(d.with_sender_and_time, 68);
   assert.equal(d.without_sender, 7, "the six fixture handoffs and the orphan delivery name no sender");
-  assert.equal(d.threads.length, 1);
-  const t = d.threads[0];
-  assert.equal(t.key, "thread-s");
-  assert.equal(t.title, "Invented sender thread", "the title comes from the sender's own records, not the recipient's");
-  assert.deepEqual(t.parts.map((p: any) => [p.handoffs, p.hook_blocked.k]), [[8, 0], [8, 0], [8, 0], [8, 8], [8, 8]]);
-  assert.deepEqual(d.pooled.map((p: any) => p.hook_blocked.p), [0, 0, 0, 1, 1]);
+  assert.deepEqual(d.threads.map((t: any) => [t.key, t.handoffs]), [["thread-a", 37], ["thread-b", 31]]);
+  const [a, b] = d.threads;
+  assert.equal(a.title, "Invented sender a", "the title comes from the sender's own records, not the recipient's");
+  // floor(5i/n) puts 37 into 8,7,8,7,7 and 31 into 7,6,6,6,6.
+  assert.deepEqual(a.parts.map((p: any) => [p.handoffs, p.hook_blocked.k]), [[8, 0], [7, 0], [8, 0], [7, 0], [7, 7]]);
+  assert.deepEqual(b.parts.map((p: any) => [p.handoffs, p.hook_blocked.k]), [[7, 7], [6, 0], [6, 0], [6, 0], [6, 0]]);
+  // Pooled by handoff, not by thread: 7 of 15 and 7 of 13, where an average of the threads would give 50% at both ends.
+  assert.deepEqual(d.pooled.map((p: any) => [p.hook_blocked.k, p.hook_blocked.n]), [[7, 15], [0, 13], [0, 14], [0, 13], [7, 13]]);
   assert.equal(d.pooled[0].hook_blocked.low, undefined, "a share over every handoff in the corpus has no interval");
-  assert.deepEqual([t.first_half.p, t.second_half.p], [0, 0.8]);
-  assert.deepEqual([d.rising, d.falling], [1, 0]);
-  const last = (await get("/messages?sender=thread-s&part=5&sort=oldest&page_size=50")).body;
-  assert.equal(last.total, 8);
-  assert.equal(last.messages[0].message_id, id(132));
-  assert.equal(last.sender_titles["thread-s"], "Invented sender thread");
-  const one = (await get("/messages/" + id(132))).body;
-  assert.deepEqual(one.sender, { key: "thread-s", title: "Invented sender thread", position: { index: 33, of: 40 } });
+  assert.equal(d.hook_trend.direction, "flat", "47% to 54% is under 10 points");
+  assert.equal(d.review_trend.direction, "too-few", "no handoff in these threads is reviewed");
+  assert.deepEqual([d.rising, d.falling], [1, 1]);
+  const last = (await get("/messages?sender=thread-a&part=5&sort=oldest&page_size=50")).body;
+  assert.equal(last.total, 7);
+  assert.equal(last.messages[0].message_id, idOf({ thread: "a", i: 30 }));
+  assert.equal(last.sender_titles["thread-a"], "Invented sender a");
+  const one = (await get("/messages/" + idOf({ thread: "a", i: 30 }))).body;
+  assert.deepEqual(one.sender, { key: "thread-a", title: "Invented sender a", position: { index: 31, of: 37 } });
   assert.equal((await get("/messages/" + id(200))).body.sender, null);
+});
+
+test("trend reads a direction only from the figures", () => {
+  const share = (k: number, n: number) => ({ k, n, p: k / n });
+  assert.equal(trend(share(1, 10), share(5, 10)).direction, "rises");
+  assert.equal(trend(share(5, 10), share(1, 10)).direction, "falls");
+  assert.equal(trend(share(5, 10), share(55, 100)).direction, "flat");
+  assert.equal(trend(wilson(1, 10), wilson(9, 10)).direction, "rises", "estimates with intervals that do not overlap");
+  assert.equal(trend(wilson(9, 10), wilson(1, 10)).direction, "falls");
+  assert.equal(trend(wilson(4, 10), wilson(6, 10)).direction, "flat", "overlapping intervals show no clear direction");
+  assert.equal(trend(wilson(0, 4), wilson(4, 4)).direction, "too-few", "fewer than 5 reviews at one end");
+  assert.equal(trend(null, share(1, 2)).direction, "too-few");
+});
+
+test("an issue with no valid severity is explained as ungradeable, not as Clean", async () => {
+  const db = new DatabaseSync(path);
+  const bad = v9(5, {});
+  bad.presentation.issues = [
+    { kind: "fused_words", severity: "sever", quote: "", effect: "e", repair: "r" },
+    { kind: "symbol_shorthand", severity: "minor", quote: "", effect: "e", repair: "r" },
+  ];
+  db.prepare("INSERT INTO analysis_records VALUES(?,?,?,?,?)").run("run-c", "review", id(5), id(5), JSON.stringify(bad));
+  db.close();
+  const review = (await get("/messages/" + id(5))).body.reviews.find((r: any) => r.run_id === "run-c");
+  assert.equal(review.scores.presentation, null);
+  assert.deepEqual(review.scoring.presentation, { written: false, unknown: false, decided_by: null, ungradeable: [0] });
+  assert.deepEqual(review.scoring.intent, { written: false, unknown: false, decided_by: null, ungradeable: [] }, "an empty issue list stays 4 Clean");
+  assert.equal(review.scores.intent, 4);
 });

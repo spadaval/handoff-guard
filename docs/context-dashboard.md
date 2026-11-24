@@ -76,7 +76,13 @@ The dashboard asks two questions and gives each one definition.
   records from `t3_turn_items`, `codex_history`, `codex_rollout` and
   `audit_cache`, which are recorded on the sender's own thread; a
   `t3_messages` `thread_id` is the recipient's and is never used. Threads with
-  at least 30 handoffs are shown one by one and pooled. Hook figures are exact;
+  at least 30 handoffs are shown one by one and pooled. The pooled figure
+  counts every handoff once, so the largest threads weigh most. The text
+  states a direction only from the figures: the hook's share rises or falls
+  when the last fifth differs from the first by 10 points or more; the
+  reviewers' share needs at least 5 reviews at each end and 95% intervals that
+  do not overlap, and the page says nothing about reviewers when there are
+  fewer. Hook figures are exact;
   reviewer figures are the share of reviewed handoffs in the active sample
   with Costly or Broken presentation, on small counts. Position counts
   handoffs sent; a later position also means a longer session and more

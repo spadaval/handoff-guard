@@ -57,6 +57,27 @@ const EXCERPT = 1000;
 /** Points from fewer reviewed messages than this are shown but not joined into a line. */
 export const SPARSE = 5;
 const MISSIONS_SHOWN = 10;
+/** Points an exact share must move between the first and last part to count as rising or falling. */
+export const TREND_POINTS = 0.1;
+type Share = { k: number; n: number; p: number; low?: number; high?: number } | null;
+/**
+ * The direction from the first part to the last, decided by the figures. An
+ * exact share rises or falls when it moves by TREND_POINTS or more. A sample
+ * estimate needs SPARSE reviews at each end, and rises or falls only when the
+ * two 95% intervals do not overlap; otherwise there is no clear direction.
+ */
+export function trend(first: Share, last: Share) {
+  const ends = { first, last };
+  if (!first || !last) return { direction: "too-few" as const, ...ends };
+  if (first.low !== undefined && last.low !== undefined) {
+    if (first.n < SPARSE || last.n < SPARSE) return { direction: "too-few" as const, ...ends };
+    if (first.high! < last.low) return { direction: "rises" as const, ...ends };
+    if (first.low > last.high!) return { direction: "falls" as const, ...ends };
+    return { direction: "flat" as const, ...ends };
+  }
+  const change = last.p - first.p;
+  return { direction: change >= TREND_POINTS ? ("rises" as const) : change <= -TREND_POINTS ? ("falls" as const) : ("flat" as const), ...ends };
+}
 /** A sender thread needs this many handoffs before its drift is shown. */
 export const DRIFT_MIN = 30;
 /** Each qualifying sender thread is cut into this many equal parts by handoff order. */
@@ -293,14 +314,22 @@ function scoring(f: Finding | undefined) {
   const written = f?.score !== undefined;
   const issues = f?.issues ?? [];
   let decidedBy: number | null = null;
+  // Issues without a valid severity. Any one of them leaves the question
+  // unscored, as score() does; it must not read as "no issue, so 4 Clean".
+  const ungradeable: number[] = [];
   if (!written && !f?.unknown) {
-    let worst = 4;
     issues.forEach((issue, i) => {
-      const v = SEVERITIES[issue.severity as keyof typeof SEVERITIES] ?? 4;
-      if (v < worst) (worst = v), (decidedBy = i);
+      if (SEVERITIES[issue?.severity as keyof typeof SEVERITIES] === undefined) ungradeable.push(i);
     });
+    if (!ungradeable.length) {
+      let worst = 4;
+      issues.forEach((issue, i) => {
+        const v = SEVERITIES[issue.severity as keyof typeof SEVERITIES];
+        if (v < worst) (worst = v), (decidedBy = i);
+      });
+    }
   }
-  return { written, unknown: !!f?.unknown, decided_by: decidedBy };
+  return { written, unknown: !!f?.unknown, decided_by: decidedBy, ungradeable };
 }
 function hookKey(input: Input) {
   return !input.hook ? "unassessed" : input.hook.blocked ? "blocked" : "allowed";
@@ -913,6 +942,8 @@ export function createDashboardApi(options: DashboardApiOptions) {
       };
     });
     const pooledInputs = qualifying.flatMap(([, l]) => l);
+    // Pooled by handoff: every handoff counts once, so the largest threads weigh most.
+    const pooled = Array.from({ length: DRIFT_PARTS }, (_, p) => segment(pooledInputs, p));
     const withSender = ix.inputs.filter((i) => i.sender_thread).length;
     return {
       min_handoffs: DRIFT_MIN,
@@ -922,9 +953,11 @@ export function createDashboardApi(options: DashboardApiOptions) {
       without_time: withSender - ix.inputs.filter((i) => i.position).length,
       threads_total: groups.size,
       qualifying_handoffs: pooledInputs.length,
-      pooled: Array.from({ length: DRIFT_PARTS }, (_, p) => segment(pooledInputs, p)),
-      rising: threads.filter((t) => t.change !== null && t.change >= 0.1).length,
-      falling: threads.filter((t) => t.change !== null && t.change <= -0.1).length,
+      pooled,
+      hook_trend: trend(pooled[0].hook_blocked, pooled[DRIFT_PARTS - 1].hook_blocked),
+      review_trend: trend(pooled[0].presentation_low, pooled[DRIFT_PARTS - 1].presentation_low),
+      rising: threads.filter((t) => t.change !== null && t.change >= TREND_POINTS).length,
+      falling: threads.filter((t) => t.change !== null && t.change <= -TREND_POINTS).length,
       threads,
     };
   }
