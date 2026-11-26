@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handoff findings</title>
+<!--
+  Findings report for the handoff corpus, as of the date in the data block.
+  Self-contained: no network requests, no build step. Open the file in a browser.
+  Every figure is drawn from the JSON in <script id="data"> below. That block
+  holds counts only. Project, mission and thread names are replaced by letters
+  and numbers, and no message text is included. See methodology.md.
+-->
+<style>
+:root {
+  color-scheme: light;
+  --ground: #fcfcfb; --sunken: #f3f3f0; --raised: #ffffff;
+  --ink: #16181d; --ink-2: #464b55; --ink-3: #676d78;
+  --rule: #e1e2e4; --rule-2: #c6c9ce;
+  --hook: #1f5fd1; --hook-tint: #e2ebfb;
+  --reviewer: #b3127a; --reviewer-tint: #fbe1f0;
+  --s4: #2f7d52; --s3: #77a35a; --s2: #b07a0c; --s1: #c2342b; --unknown: #9196a0;
+  --on-mark: #ffffff;
+  --sans: "Libre Franklin Variable", "Libre Franklin", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type: "Courier Prime", "Courier New", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ground: #0f1319; --sunken: #141a22; --raised: #171d26;
+    --ink: #e6e8ec; --ink-2: #b5bac3; --ink-3: #8d939e;
+    --rule: #242b35; --rule-2: #39414d;
+    --hook: #4f86ec; --hook-tint: #16254a;
+    --reviewer: #d9509f; --reviewer-tint: #3a1730;
+    --s4: #3aa76a; --s3: #7fae5f; --s2: #bf8a24; --s1: #e0574d; --unknown: #6f7682;
+    --on-mark: #0f1319;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--ground); }
+main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 96px; }
+h1 { font-size: 2.25rem; line-height: 1.1; letter-spacing: -0.025em; font-weight: 650; margin: 0 0 12px; }
+h2 { font-size: 1.5rem; line-height: 1.2; letter-spacing: -0.015em; font-weight: 650; margin: 0 0 8px; }
+h3 { font-size: 1rem; font-weight: 650; margin: 28px 0 8px; }
+p { margin: 0 0 12px; max-width: 72ch; }
+a { color: inherit; text-underline-offset: 2px; }
+code, .type { font-family: var(--type); font-size: 0.875em; }
+section { border-top: 1px solid var(--rule); margin-top: 44px; padding-top: 32px; }
+.lede { font-size: 1.125rem; color: var(--ink-2); }
+.meta, .note { font-size: 0.8125rem; color: var(--ink-3); }
+.note { margin-top: 10px; max-width: 80ch; }
+.kicker { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+nav { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.8125rem; margin-top: 20px; }
+nav a { color: var(--ink-2); }
+
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 28px; }
+.tile { background: var(--raised); border: 1px solid var(--rule); border-radius: 4px; padding: 14px 16px; }
+.tile b { display: block; font-size: 2.25rem; line-height: 1.05; letter-spacing: -0.03em; font-weight: 650; }
+.tile span { display: block; font-size: 0.8125rem; color: var(--ink-2); margin-top: 6px; }
+.tile small { display: block; font-size: 0.75rem; color: var(--ink-3); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.fig { margin: 20px 0 0; }
+.fig > .cap { font-size: 0.8125rem; font-weight: 600; margin-bottom: 8px; }
+
+/* stacked bar */
+.stack { display: flex; gap: 2px; height: 30px; }
+.stack > div { display: flex; align-items: center; justify-content: center; min-width: 2px; border-radius: 3px; color: var(--on-mark); font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; }
+.stackrow { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: center; margin-bottom: 6px; font-size: 0.8125rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.75rem; color: var(--ink-2); margin-top: 10px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.c1 { background: var(--s1); } .c2 { background: var(--s2); } .c3 { background: var(--s3); } .c4 { background: var(--s4); }
+.ch { background: var(--hook); } .cr { background: var(--reviewer); } .cu { background: var(--unknown); }
+
+/* bar rows */
+.rows { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 12px; align-items: center; font-size: 0.8125rem; }
+.rows .lab { color: var(--ink); }
+.rows .lab.type { font-size: 0.8125rem; }
+.rows .val { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.rows .sub { grid-column: 1 / -1; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); margin-top: 10px; }
+.track { position: relative; height: 16px; background: var(--sunken); border-radius: 3px; }
+.track > .bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; min-width: 2px; }
+.track > .ci { position: absolute; top: 7px; height: 2px; background: var(--ink); opacity: 0.55; }
+.track.none > .bar { display: none; }
+.muted { color: var(--ink-3); }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.8125rem; }
+th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 0.75rem; font-weight: 600; color: var(--ink-3); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.frag { font-family: var(--type); font-size: 0.8125rem; overflow-wrap: anywhere; background: var(--sunken); border-radius: 2px; padding: 2px 6px; display: inline-block; }
+.chip { display: inline-block; min-width: 72px; padding: 1px 8px; border-radius: 3px; color: var(--on-mark); font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+
+/* grids */
+.grid { display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.grid > div { background: var(--raised); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 6px; text-align: center; font-size: 1.125rem; font-weight: 650; }
+.grid > .h { background: none; border: 0; font-size: 0.75rem; font-weight: 600; color: var(--ink-3); padding: 4px 2px; display: flex; align-items: center; justify-content: center; }
+.grid > .h.l { justify-content: flex-start; text-align: left; }
+.grid > .zero { color: var(--ink-3); font-weight: 400; }
+.grid > .miss { border: 2px solid var(--reviewer); }
+.grid > .fp { border: 2px solid var(--hook); }
+.grid > .diag { border: 1.5px solid var(--ink); }
+.agree { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.agree .grid > div { font-size: 0.875rem; padding: 5px 2px; }
+.agree .t { font-size: 0.8125rem; font-weight: 600; margin-bottom: 6px; }
+.agree .e { font-size: 0.75rem; color: var(--ink-2); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+/* column chart */
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: var(--sans); font-size: 11px; fill: var(--ink-2); }
+svg .v { fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+svg .gl { stroke: var(--rule); stroke-width: 1; }
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; width: 92px; }
+.spark > i { flex: 1; background: var(--hook); border-radius: 2px 2px 0 0; min-height: 1px; }
+
+ul.limits { padding-left: 20px; max-width: 76ch; }
+ul.limits li { margin-bottom: 8px; }
+@media (max-width: 820px) {
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .two { grid-template-columns: 1fr; }
+  .agree { grid-template-columns: 1fr 1fr; }
+  h1 { font-size: 1.75rem; }
+}
+@media (max-width: 480px) {
+  main { padding: 24px 16px 64px; }
+  .stackrow { grid-template-columns: 1fr; gap: 2px; }
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="kicker">Handoff Guard · findings as of <span id="asof"></span></div>
+  <h1>Two in three agent handoffs need work, and nearly all of it is run-together writing</h1>
+  <p class="lede">We collected 3,464 messages that coding agents sent each other, had model reviewers read a fair sample of 86 against a written rubric, and ran the guard's mechanical checks on all of them. This page holds the figures and charts. The <a href="README.md">summary</a> is the short version and the <a href="methodology.md">methodology</a> says how the data was collected, cleaned and judged.</p>
+  <p class="meta">Project, mission and thread names are replaced by letters and numbers. The only message text shown is the set of fragments the rubric already quotes, with names, numbers and hashes replaced.</p>
+  <div class="tiles" id="tiles"></div>
+  <nav>
+    <a href="#prevalence">How many need work</a>
+    <a href="#cause">What is wrong</a>
+    <a href="#examples">What it looks like</a>
+    <a href="#source">Where it comes from</a>
+    <a href="#drift">Drift within a thread</a>
+    <a href="#missions">Missions</a>
+    <a href="#hook">What the hook catches</a>
+    <a href="#agreement">Reviewer agreement</a>
+    <a href="#cost">Cost of the clear version</a>
+    <a href="#limits">Limits</a>
+  </nav>
+</header>
+
+<section id="prevalence">
+  <h2>How many handoffs need work</h2>
+  <p>A handoff needs work when its lowest score on intent, content or presentation is 1 (Broken) or 2 (Costly). On the fair sample that is <b id="nw"></b>. Messages cluster by mission, so the real uncertainty is wider than the interval.</p>
+  <div class="fig">
+    <div class="cap">Lowest score of each handoff, fair sample of 86</div>
+    <div id="lowest"></div>
+  </div>
+  <div class="fig">
+    <div class="cap">Score on each question, fair sample of 86</div>
+    <div id="dims"></div>
+    <div class="legend"><span><i class="c1"></i>1 Broken</span><span><i class="c2"></i>2 Costly</span><span><i class="c3"></i>3 Minor</span><span><i class="c4"></i>4 Clean</span></div>
+  </div>
+  <p class="note">Intent asks whether the message says what the sender wants. Content asks whether it carries what the recipient needs. Presentation asks whether it can be read in one pass. Senders almost always state the ask. What fails is the writing.</p>
+</section>
+
+<section id="cause">
+  <h2>What is wrong with them</h2>
+  <p id="causeText"></p>
+  <div class="two">
+    <div class="fig">
+      <div class="cap">Which questions scored 1 or 2, among the 56 that need work</div>
+      <div class="rows" id="combos"></div>
+    </div>
+    <div class="fig">
+      <div class="cap">Handoffs with at least one issue of each kind, of 86</div>
+      <div class="rows" id="issues"></div>
+      <div class="note" id="issueNote"></div>
+    </div>
+  </div>
+  <p class="note">An issue kind is counted at any severity, so a handoff with one minor <code>private_reference</code> counts here even when it does not need work. The line through each bar is the 95% Wilson interval.</p>
+</section>
+
+<section id="examples">
+  <h2>What it looks like</h2>
+  <p>These fragments are the worked examples in <a href="../communication-rubric.md">the rubric</a>. They come from real handoffs with names, numbers and hashes replaced.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Presentation</th><th>Fragment</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip c4">4 Clean</span></td><td><span class="frag">Please review the parser change and report any failing test by name.</span></td><td>An ordinary sentence.</td></tr>
+      <tr><td><span class="chip c3">3 Minor</span></td><td><span class="frag">lifecycle commit after7c1e9d2f0). Status in review round1</span></td><td>Two glued spots. The reader splits them and loses nothing.</td></tr>
+      <tr><td><span class="chip c2">2 Costly</span></td><td><span class="frag">Freshreceiptjustreadupdatesstage:</span></td><td>Every word is fused, but it splits one way.</td></tr>
+      <tr><td><span class="chip c2">2 Costly</span></td><td><span class="frag">PASS1840 (52.10s, pinned8-15),31focusedPASS</span></td><td>Counts are glued to words. With effort it reads as 1,840 passing, CPUs 8 to 15 pinned, 31 focused tests passing.</td></tr>
+      <tr><td><span class="chip c1">1 Broken</span></td><td><span class="frag">Ifstillrunningreportactualcurrentphaseonlyforfairhandoff, no clockETAconsent</span></td><td>The first half splits. The second half is an instruction that still has no clear meaning after splitting.</td></tr>
+      <tr><td><span class="chip c1">1 Broken</span></td><td><span class="frag">NewUSER&lt;=20min two300s16CPUbreakerOFF/ONperformancewindowreserved</span></td><td>The recipient must act on a time window, two trials, a CPU count and a breaker state, and cannot tell which number belongs to which.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="source">
+  <h2>Where it comes from</h2>
+  <p id="sourceText"></p>
+  <div class="legend"><span><i class="ch"></i>Blocked by the hook, exact count over all handoffs</span><span><i class="cr"></i>Needs work, reviewed handoffs in the fair sample, with 95% interval</span></div>
+  <div class="two">
+    <div>
+      <div class="fig"><div class="cap">By sender model recorded at send time</div><div class="rows" id="byModel"></div></div>
+      <div class="fig"><div class="cap">By sender model, adding the sending thread's saved setting</div><div class="rows" id="byModelThread"></div></div>
+      <div class="fig"><div class="cap">By project</div><div class="rows" id="byProject"></div></div>
+    </div>
+    <div>
+      <div class="fig"><div class="cap">By month of first observation</div><div class="rows" id="byMonth"></div></div>
+      <div class="fig"><div class="cap">By message size in characters</div><div class="rows" id="bySize"></div></div>
+    </div>
+  </div>
+  <p class="note">The model recorded at send time exists for 862 of the 3,464 handoffs. The thread setting covers more, but it is the thread's saved model at export time and can differ from the model that wrote the message. Model, project, month and delivery tool change together in this corpus, so these charts show where the shorthand is, not what causes it. A group with fewer than 5 reviewed handoffs shows no reviewer bar.</p>
+</section>
+
+<section id="drift">
+  <h2>A sender's writing gets worse as its thread goes on</h2>
+  <p id="driftText"></p>
+  <div class="two">
+    <div class="fig">
+      <div class="cap">Share of handoffs by fifth of the sender's thread, pooled over 15 threads</div>
+      <div id="driftChart"></div>
+      <div class="legend"><span><i class="ch"></i>Blocked by the hook (exact)</span><span><i class="cr" style="border-radius:50%"></i>Costly or Broken presentation, reviewed handoffs, with 95% interval</span></div>
+    </div>
+    <div class="fig">
+      <div class="cap">Each thread with 30 or more handoffs: hook block rate by fifth</div>
+      <div class="scroll"><table id="threads"></table></div>
+    </div>
+  </div>
+  <p class="note" id="driftNote"></p>
+</section>
+
+<section id="missions">
+  <h2>A few long missions supply most of the corpus</h2>
+  <p id="missionText"></p>
+  <div class="scroll"><table id="missionTable"></table></div>
+  <div class="fig"><div class="cap">Mission A, day by day</div><div class="rows" id="missionDays"></div></div>
+  <p class="note">A mission is a connected group of threads. A mission and a day each mix sender threads at different stages, so this shows where handoffs came from, not how one sender's writing changes.</p>
+</section>
+
+<section id="hook">
+  <h2>What the hook catches</h2>
+  <p id="hookText"></p>
+  <div class="two">
+    <div class="fig">
+      <div class="cap">Hook result against the reviewer's presentation score, fair sample of 86</div>
+      <div class="grid" id="confusion" style="grid-template-columns: 84px repeat(4, 1fr)"></div>
+      <div class="legend"><span><i style="border:2px solid var(--reviewer);background:none"></i>Miss: allowed, but Costly or Broken</span><span><i style="border:2px solid var(--hook);background:none"></i>Blocked, but Minor or Clean</span></div>
+    </div>
+    <div class="fig">
+      <div class="cap">Handoffs each check fires on, of 3,464</div>
+      <div class="rows" id="checks"></div>
+      <div class="note" id="checkNote"></div>
+    </div>
+  </div>
+  <div class="fig">
+    <div class="cap">Blocked share by presentation score, with and without the glued-values check</div>
+    <div class="scroll"><table>
+      <thead><tr><th>Presentation score</th><th class="n">All five checks</th><th class="n">Without glued values</th></tr></thead>
+      <tbody>
+        <tr><td>1 Broken</td><td class="n">15 of 15</td><td class="n">14 of 15</td></tr>
+        <tr><td>2 Costly</td><td class="n">37 of 38</td><td class="n">25 of 38</td></tr>
+        <tr><td>3 Minor</td><td class="n">8 of 14</td><td class="n">0 of 14</td></tr>
+        <tr><td>4 Clean</td><td class="n">0 of 19</td><td class="n">0 of 19</td></tr>
+        <tr><td>All 3,464 handoffs</td><td class="n">2,090 (60%)</td><td class="n">35%</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <p class="note">The glued-values check was written by reading the handoffs the other checks missed, which are the same reviewed handoffs it is scored on here. Its figures are the most likely to shrink on new traffic. The eight Minor handoffs it blocks each have a hash glued to a word, which is the defect the reviewer marked.</p>
+</section>
+
+<section id="agreement">
+  <h2>Do the reviewers agree</h2>
+  <p id="agreeText"></p>
+  <div id="agreeTables"></div>
+  <p class="note">Rows are the first rater's score and columns the second's, from 1 Broken to 4 Clean. The outlined diagonal is exact agreement. Handoffs the rubric quotes as examples are left out, because a reviewer who meets one has been shown its severity. Both raters are models. No person has labelled any handoff.</p>
+</section>
+
+<section id="cost">
+  <h2>What the clear version costs</h2>
+  <p id="costText"></p>
+  <div class="fig" style="max-width:560px">
+    <div class="cap">Length of the reviewer's plain-English rewrite relative to the text it replaces, 53 rewrites</div>
+    <div id="ratio"></div>
+  </div>
+  <p class="note">Reviewers rewrite a handoff when its presentation is Costly or Broken: the whole message when it is 1,500 characters or fewer, otherwise the passage with the main ask. A rewrite may add no facts and must mark what it could not decode as <code>[unclear: …]</code>.</p>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <ul class="limits">
+    <li><b>Two model judges, no human one.</b> Scores are Claude Opus's, checked on 37 handoffs by Gemini Neon.</li>
+    <li><b>A narrow corpus.</b> 84% of the handoffs are from November 2026, 88% from one project, and 63% from one mission. Figures describe this corpus, not agent traffic in general.</li>
+    <li><b>Confounded sources.</b> Sender model, project, month and delivery tool change together. Nothing here says which of them causes the shorthand.</li>
+    <li><b>No untouched test set.</b> The hook's thresholds were set against this corpus and checked on reviews that include the held-out split. The glued-values check was designed from the reviewed sample itself.</li>
+    <li><b>Small counts.</b> 86 reviewed handoffs support the headline. Most breakdowns rest on a handful each, and the intervals treat clustered messages as independent.</li>
+    <li><b>Detection, not effect.</b> Nothing measures whether a recipient acted wrongly on a bad handoff, or what a sender does after the hook blocks one.</li>
+  </ul>
+</section>
+</main>
+
+<script id="data" type="application/json">{"as_of":"2026-11-24","corpus":{"bodies":36078,"inputs":3464,"with_recorded_model":862,"with_thread_model":2544,"with_hook_report":3464,"missions":461},"needs_work":{"k":56,"n":86,"low":0.546,"high":0.743},"lowest":{"1":{"k":15,"n":86,"low":0.109,"high":0.268},"2":{"k":41,"n":86,"low":0.374,"high":0.581},"3":{"k":15,"n":86,"low":0.109,"high":0.268},"4":{"k":15,"n":86,"low":0.109,"high":0.268}},"dimensions":{"intent":{"1":0,"2":3,"3":24,"4":59,"null":0},"content":{"1":1,"2":27,"3":30,"4":28,"null":0},"presentation":{"1":15,"2":38,"3":14,"4":19,"null":0}},"cause":{"needs_work":56,"by_dimension":{"intent":2,"content":16,"presentation":53},"combinations":[{"dimensions":["presentation"],"k":39},{"dimensions":["content","presentation"],"k":13},{"dimensions":["content"],"k":2},{"dimensions":["intent","content","presentation"],"k":1},{"dimensions":["intent"],"k":1}],"intent_content_only":3},"issues":[{"dimension":"intent","kind":"no_ask","k":0,"n":86,"low":0,"high":0.043},{"dimension":"intent","kind":"buried_ask","k":18,"n":86,"low":0.137,"high":0.307},{"dimension":"intent","kind":"unclear_owner","k":5,"n":86,"low":0.025,"high":0.129},{"dimension":"intent","kind":"no_done_condition","k":3,"n":86,"low":0.012,"high":0.098},{"dimension":"intent","kind":"mixed_purposes","k":2,"n":86,"low":0.006,"high":0.081},{"dimension":"content","kind":"missing_essential","k":13,"n":86,"low":0.091,"high":0.242},{"dimension":"content","kind":"private_reference","k":45,"n":86,"low":0.419,"high":0.626},{"dimension":"content","kind":"unexplained_value","k":24,"n":86,"low":0.195,"high":0.382},{"dimension":"content","kind":"unreachable_reference","k":0,"n":86,"low":0,"high":0.043},{"dimension":"content","kind":"irrelevant_material","k":0,"n":86,"low":0,"high":0.043},{"dimension":"content","kind":"duplication","k":0,"n":86,"low":0,"high":0.043},{"dimension":"content","kind":"restated_source","k":7,"n":86,"low":0.04,"high":0.159},{"dimension":"content","kind":"record_dump","k":2,"n":86,"low":0.006,"high":0.081},{"dimension":"content","kind":"conflicting_instructions","k":0,"n":86,"low":0,"high":0.043},{"dimension":"presentation","kind":"fused_words","k":46,"n":86,"low":0.43,"high":0.637},{"dimension":"presentation","kind":"broken_literal","k":36,"n":86,"low":0.32,"high":0.524},{"dimension":"presentation","kind":"dropped_words","k":12,"n":86,"low":0.082,"high":0.228},{"dimension":"presentation","kind":"symbol_shorthand","k":12,"n":86,"low":0.082,"high":0.228},{"dimension":"presentation","kind":"coined_abbreviation","k":1,"n":86,"low":0.002,"high":0.063},{"dimension":"presentation","kind":"status_chain","k":7,"n":86,"low":0.04,"high":0.159},{"dimension":"presentation","kind":"repetition","k":0,"n":86,"low":0,"high":0.043},{"dimension":"presentation","kind":"disorganised","k":0,"n":86,"low":0,"high":0.043}],"by_model":[{"key":"gpt-5.5","inputs":446,"blocked":{"k":0,"n":446},"reviewed":7,"needs_work":{"k":0,"n":7,"low":0,"high":0.354},"lowest":{"1":0,"2":0,"3":1,"4":6}},{"key":"gpt-6.1-sol","inputs":415,"blocked":{"k":383,"n":415},"reviewed":13,"needs_work":{"k":13,"n":13,"low":0.772,"high":1},"lowest":{"1":4,"2":9,"3":0,"4":0}},{"key":"gpt-5.4","inputs":1,"blocked":{"k":0,"n":1},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"unknown","inputs":2602,"blocked":{"k":1707,"n":2602},"reviewed":66,"needs_work":{"k":43,"n":66,"low":0.531,"high":0.755},"lowest":{"1":11,"2":32,"3":14,"4":9}}],"by_model_thread":[{"key":"gpt-6.1-sol","inputs":2920,"blocked":{"k":2084,"n":2920},"reviewed":77,"needs_work":{"k":56,"n":77,"low":0.619,"high":0.814},"lowest":{"1":15,"2":41,"3":14,"4":7}},{"key":"gpt-5.5","inputs":446,"blocked":{"k":0,"n":446},"reviewed":7,"needs_work":{"k":0,"n":7,"low":0,"high":0.354},"lowest":{"1":0,"2":0,"3":1,"4":6}},{"key":"github-copilot/grok-4.6","inputs":25,"blocked":{"k":0,"n":25},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"gpt-5.6-sol","inputs":14,"blocked":{"k":0,"n":14},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"gpt-5.4","inputs":1,"blocked":{"k":0,"n":1},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"unknown","inputs":58,"blocked":{"k":6,"n":58},"reviewed":2,"needs_work":{"k":0,"n":2,"low":0,"high":0.658},"lowest":{"1":0,"2":0,"3":0,"4":2}}],"by_project":[{"key":"Project A","inputs":3048,"blocked":{"k":2090,"n":3048},"reviewed":80,"needs_work":{"k":56,"n":80,"low":0.592,"high":0.789},"lowest":{"1":15,"2":41,"3":14,"4":10}},{"key":"Project B","inputs":401,"blocked":{"k":0,"n":401},"reviewed":6,"needs_work":{"k":0,"n":6,"low":0,"high":0.39},"lowest":{"1":0,"2":0,"3":1,"4":5}},{"key":"Unknown","inputs":15,"blocked":{"k":0,"n":15},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}}],"by_size":[{"key":"under 500","inputs":449,"blocked":{"k":165,"n":449},"reviewed":17,"needs_work":{"k":6,"n":17,"low":0.173,"high":0.587},"lowest":{"1":2,"2":4,"3":4,"4":7}},{"key":"500–1,999","inputs":1987,"blocked":{"k":1093,"n":1987},"reviewed":41,"needs_work":{"k":28,"n":41,"low":0.53,"high":0.804},"lowest":{"1":4,"2":24,"3":6,"4":7}},{"key":"2,000–4,999","inputs":601,"blocked":{"k":421,"n":601},"reviewed":15,"needs_work":{"k":10,"n":15,"low":0.417,"high":0.848},"lowest":{"1":2,"2":8,"3":4,"4":1}},{"key":"5,000–11,999","inputs":419,"blocked":{"k":403,"n":419},"reviewed":13,"needs_work":{"k":12,"n":13,"low":0.667,"high":0.986},"lowest":{"1":7,"2":5,"3":1,"4":0}},{"key":"12,000 and over","inputs":8,"blocked":{"k":8,"n":8},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}}],"by_month":[{"key":"2026-05","inputs":25,"blocked":{"k":0,"n":25},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":0,"4":1}},{"key":"2026-06","inputs":423,"blocked":{"k":0,"n":423},"reviewed":6,"needs_work":{"k":0,"n":6,"low":0,"high":0.39},"lowest":{"1":0,"2":0,"3":1,"4":5}},{"key":"2026-07","inputs":0,"blocked":null,"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"2026-08","inputs":0,"blocked":null,"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"2026-09","inputs":0,"blocked":null,"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"2026-10","inputs":89,"blocked":{"k":20,"n":89},"reviewed":4,"needs_work":{"k":1,"n":4,"low":0.046,"high":0.699},"lowest":{"1":0,"2":1,"3":1,"4":2}},{"key":"2026-11","inputs":2927,"blocked":{"k":2070,"n":2927},"reviewed":75,"needs_work":{"k":55,"n":75,"low":0.624,"high":0.82},"lowest":{"1":15,"2":40,"3":13,"4":7}}],"missions":{"count":461,"busiest_days":[{"day":"2026-11-15","n":796},{"day":"2026-11-16","n":741},{"day":"2026-11-18","n":729}],"top":[{"key":"Mission A","inputs":2191,"blocked":{"k":1560,"n":2191},"reviewed":57,"needs_work":{"k":43,"n":57,"low":0.629,"high":0.848},"lowest":{"1":7,"2":36,"3":10,"4":4},"first_day":"2026-11-14","last_day":"2026-11-18","days":[{"key":"2026-11-14","inputs":4,"blocked":{"k":0,"n":4},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":0,"4":1}},{"key":"2026-11-15","inputs":641,"blocked":{"k":381,"n":641},"reviewed":15,"needs_work":{"k":8,"n":15,"low":0.301,"high":0.752},"lowest":{"1":0,"2":8,"3":4,"4":3}},{"key":"2026-11-16","inputs":741,"blocked":{"k":607,"n":741},"reviewed":20,"needs_work":{"k":16,"n":20,"low":0.584,"high":0.919},"lowest":{"1":1,"2":15,"3":4,"4":0}},{"key":"2026-11-17","inputs":77,"blocked":{"k":73,"n":77},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"2026-11-18","inputs":728,"blocked":{"k":499,"n":728},"reviewed":21,"needs_work":{"k":19,"n":21,"low":0.711,"high":0.973},"lowest":{"1":6,"2":13,"3":2,"4":0}}]},{"key":"Mission B","inputs":306,"blocked":{"k":261,"n":306},"reviewed":10,"needs_work":{"k":7,"n":10,"low":0.397,"high":0.892},"lowest":{"1":6,"2":1,"3":1,"4":2},"first_day":"2026-11-08","last_day":"2026-11-09","days":[{"key":"2026-11-08","inputs":161,"blocked":{"k":129,"n":161},"reviewed":3,"needs_work":{"k":2,"n":3,"low":0.208,"high":0.939},"lowest":{"1":2,"2":0,"3":1,"4":0}},{"key":"2026-11-09","inputs":145,"blocked":{"k":132,"n":145},"reviewed":7,"needs_work":{"k":5,"n":7,"low":0.359,"high":0.918},"lowest":{"1":4,"2":1,"3":0,"4":2}}]},{"key":"Mission C","inputs":228,"blocked":{"k":225,"n":228},"reviewed":6,"needs_work":{"k":5,"n":6,"low":0.436,"high":0.97},"lowest":{"1":2,"2":3,"3":1,"4":0},"first_day":"2026-11-05","last_day":"2026-11-07","days":[{"key":"2026-11-05","inputs":88,"blocked":{"k":86,"n":88},"reviewed":3,"needs_work":{"k":3,"n":3,"low":0.439,"high":1},"lowest":{"1":1,"2":2,"3":0,"4":0}},{"key":"2026-11-06","inputs":94,"blocked":{"k":93,"n":94},"reviewed":2,"needs_work":{"k":2,"n":2,"low":0.342,"high":1},"lowest":{"1":1,"2":1,"3":0,"4":0}},{"key":"2026-11-07","inputs":46,"blocked":{"k":46,"n":46},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":1,"4":0}}]},{"key":"Mission D","inputs":155,"blocked":{"k":18,"n":155},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":1,"4":0},"first_day":"2026-11-15","last_day":"2026-11-15","days":[{"key":"2026-11-15","inputs":155,"blocked":{"k":18,"n":155},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":1,"4":0}}]},{"key":"Mission E","inputs":42,"blocked":{"k":2,"n":42},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":0,"4":1},"first_day":"2026-10-12","last_day":"2026-10-15","days":[{"key":"2026-10-12","inputs":26,"blocked":{"k":0,"n":26},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"2026-10-14","inputs":9,"blocked":{"k":0,"n":9},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":0,"4":1}},{"key":"2026-10-15","inputs":7,"blocked":{"k":2,"n":7},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}}]},{"key":"Mission F","inputs":28,"blocked":{"k":8,"n":28},"reviewed":2,"needs_work":{"k":1,"n":2,"low":0.095,"high":0.905},"lowest":{"1":0,"2":1,"3":1,"4":0},"first_day":"2026-10-24","last_day":"2026-10-25","days":[{"key":"2026-10-24","inputs":23,"blocked":{"k":4,"n":23},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":1,"4":0}},{"key":"2026-10-25","inputs":5,"blocked":{"k":4,"n":5},"reviewed":1,"needs_work":{"k":1,"n":1,"low":0.207,"high":1},"lowest":{"1":0,"2":1,"3":0,"4":0}}]},{"key":"Mission G","inputs":28,"blocked":{"k":6,"n":28},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0},"first_day":"2026-11-10","last_day":"2026-11-10","days":[{"key":"2026-11-10","inputs":28,"blocked":{"k":6,"n":28},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}}]},{"key":"Mission H","inputs":14,"blocked":{"k":0,"n":14},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0},"first_day":"2026-11-09","last_day":"2026-11-09","days":[{"key":"2026-11-09","inputs":14,"blocked":{"k":0,"n":14},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}}]},{"key":"Mission I","inputs":11,"blocked":{"k":8,"n":11},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0},"first_day":"2026-10-21","last_day":"2026-10-22","days":[{"key":"2026-10-21","inputs":1,"blocked":{"k":0,"n":1},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}},{"key":"2026-10-22","inputs":10,"blocked":{"k":8,"n":10},"reviewed":0,"needs_work":null,"lowest":{"1":0,"2":0,"3":0,"4":0}}]},{"key":"Mission J","inputs":8,"blocked":{"k":2,"n":8},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":0,"4":1},"first_day":"2026-10-22","last_day":"2026-10-22","days":[{"key":"2026-10-22","inputs":8,"blocked":{"k":2,"n":8},"reviewed":1,"needs_work":{"k":0,"n":1,"low":0,"high":0.793},"lowest":{"1":0,"2":0,"3":0,"4":1}}]}]},"drift":{"min_handoffs":30,"without_sender":505,"qualifying_handoffs":2479,"rising":13,"falling":0,"pooled":[{"part":1,"blocked":{"k":260,"n":501},"reviewed":11,"presentation_low":{"k":5,"n":11,"low":0.213,"high":0.72}},{"part":2,"blocked":{"k":344,"n":496},"reviewed":5,"presentation_low":{"k":2,"n":5,"low":0.118,"high":0.769}},{"part":3,"blocked":{"k":380,"n":495},"reviewed":13,"presentation_low":{"k":9,"n":13,"low":0.424,"high":0.873}},{"part":4,"blocked":{"k":417,"n":496},"reviewed":17,"presentation_low":{"k":14,"n":17,"low":0.59,"high":0.938}},{"part":5,"blocked":{"k":440,"n":491},"reviewed":11,"presentation_low":{"k":11,"n":11,"low":0.741,"high":1}}],"threads":[{"key":"Thread 1","mission":"Mission A","handoffs":888,"first_half":{"k":302,"n":444},"second_half":{"k":384,"n":444},"parts":[{"k":80,"n":178},{"k":140,"n":178},{"k":145,"n":177},{"k":154,"n":178},{"k":167,"n":177}]},{"key":"Thread 2","mission":"Mission A","handoffs":344,"first_half":{"k":109,"n":172},"second_half":{"k":165,"n":172},"parts":[{"k":36,"n":69},{"k":45,"n":69},{"k":59,"n":69},{"k":66,"n":69},{"k":68,"n":68}]},{"key":"Thread 3","mission":"Mission B","handoffs":260,"first_half":{"k":127,"n":130},"second_half":{"k":130,"n":130},"parts":[{"k":52,"n":52},{"k":49,"n":52},{"k":52,"n":52},{"k":52,"n":52},{"k":52,"n":52}]},{"key":"Thread 4","mission":"Mission D","handoffs":155,"first_half":{"k":5,"n":77},"second_half":{"k":13,"n":78},"parts":[{"k":0,"n":31},{"k":2,"n":31},{"k":3,"n":31},{"k":6,"n":31},{"k":7,"n":31}]},{"key":"Thread 5","mission":"Mission A","handoffs":150,"first_half":{"k":41,"n":75},"second_half":{"k":60,"n":75},"parts":[{"k":16,"n":30},{"k":19,"n":30},{"k":14,"n":30},{"k":27,"n":30},{"k":25,"n":30}]},{"key":"Thread 6","mission":"Mission C","handoffs":149,"first_half":{"k":74,"n":74},"second_half":{"k":75,"n":75},"parts":[{"k":30,"n":30},{"k":30,"n":30},{"k":30,"n":30},{"k":30,"n":30},{"k":29,"n":29}]},{"key":"Thread 7","mission":"Mission A","handoffs":85,"first_half":{"k":22,"n":42},"second_half":{"k":40,"n":43},"parts":[{"k":7,"n":17},{"k":13,"n":17},{"k":10,"n":17},{"k":15,"n":17},{"k":17,"n":17}]},{"key":"Thread 8","mission":"Mission A","handoffs":81,"first_half":{"k":18,"n":40},"second_half":{"k":24,"n":41},"parts":[{"k":7,"n":17},{"k":7,"n":16},{"k":8,"n":16},{"k":9,"n":16},{"k":11,"n":16}]},{"key":"Thread 9","mission":"Mission A","handoffs":78,"first_half":{"k":19,"n":39},"second_half":{"k":38,"n":39},"parts":[{"k":7,"n":16},{"k":6,"n":16},{"k":13,"n":15},{"k":16,"n":16},{"k":15,"n":15}]},{"key":"Thread 10","mission":"Mission A","handoffs":75,"first_half":{"k":20,"n":37},"second_half":{"k":31,"n":38},"parts":[{"k":6,"n":15},{"k":9,"n":15},{"k":11,"n":15},{"k":10,"n":15},{"k":15,"n":15}]},{"key":"Thread 11","mission":"Mission A","handoffs":56,"first_half":{"k":20,"n":28},"second_half":{"k":26,"n":28},"parts":[{"k":9,"n":12},{"k":7,"n":11},{"k":10,"n":11},{"k":9,"n":11},{"k":11,"n":11}]},{"key":"Thread 12","mission":"Mission A","handoffs":43,"first_half":{"k":7,"n":21},"second_half":{"k":17,"n":22},"parts":[{"k":2,"n":9},{"k":2,"n":9},{"k":8,"n":8},{"k":8,"n":9},{"k":4,"n":8}]},{"key":"Thread 13","mission":"Mission A","handoffs":42,"first_half":{"k":6,"n":21},"second_half":{"k":18,"n":21},"parts":[{"k":1,"n":9},{"k":4,"n":8},{"k":6,"n":9},{"k":6,"n":8},{"k":7,"n":8}]},{"key":"Thread 14","mission":"Mission A","handoffs":37,"first_half":{"k":12,"n":18},"second_half":{"k":17,"n":19},"parts":[{"k":3,"n":8},{"k":6,"n":7},{"k":8,"n":8},{"k":5,"n":7},{"k":7,"n":7}]},{"key":"Thread 15","mission":"Mission A","handoffs":36,"first_half":{"k":9,"n":18},"second_half":{"k":12,"n":18},"parts":[{"k":4,"n":8},{"k":5,"n":7},{"k":3,"n":7},{"k":4,"n":7},{"k":5,"n":7}]}]},"screening":{"cells":{"blocked":{"1":15,"2":37,"3":8,"4":0,"null":0},"allowed":{"1":0,"2":1,"3":6,"4":19,"null":0},"unassessed":{"1":0,"2":0,"3":0,"4":0,"null":0}},"blocked_low":{"k":52,"n":53,"low":0.901,"high":0.997},"allowed_high":{"k":25,"n":33,"low":0.59,"high":0.872},"outside":{"k":3,"presentation_unknown":0,"needs_work":56,"reviewed":86},"checks":[{"rule":"characters","corpus":{"pass":3456,"block":8}},{"rule":"fused_words","corpus":{"pass":2706,"block":758}},{"rule":"missing_spaces","corpus":{"pass":2342,"block":1122}},{"rule":"glued_values","corpus":{"block":1921,"pass":1543}},{"rule":"punctuation_spacing","corpus":{"pass":3200,"warn":264}},{"rule":"needless_shorthand","corpus":{"pass":3404,"warn":60}}],"corpus_blocked":{"k":2090,"n":3464}},"agreement":[{"kind":"different-raters","a":"claude-opus-5-5 @ handoff-v9","b":"gemini-4-neon @ handoff-v9","messages":37,"questions":{"intent":{"table":{"1":{"1":0,"2":0,"3":0,"4":0,"null":0},"2":{"1":0,"2":1,"3":0,"4":0,"null":0},"3":{"1":0,"2":0,"3":7,"4":1,"null":0},"4":{"1":0,"2":0,"3":0,"4":28,"null":0},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":36,"n":37,"low":0.862,"high":0.995}},"content":{"table":{"1":{"1":0,"2":0,"3":0,"4":0,"null":0},"2":{"1":0,"2":11,"3":0,"4":0,"null":0},"3":{"1":0,"2":5,"3":6,"4":2,"null":0},"4":{"1":0,"2":0,"3":2,"4":10,"null":1},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":27,"n":36,"low":0.589,"high":0.862}},"presentation":{"table":{"1":{"1":5,"2":2,"3":0,"4":0,"null":0},"2":{"1":1,"2":14,"3":0,"4":0,"null":0},"3":{"1":0,"2":1,"3":3,"4":0,"null":0},"4":{"1":0,"2":0,"3":1,"4":10,"null":0},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":32,"n":37,"low":0.72,"high":0.941}},"lowest":{"table":{"1":{"1":5,"2":2,"3":0,"4":0,"null":0},"2":{"1":1,"2":14,"3":0,"4":0,"null":0},"3":{"1":0,"2":1,"3":5,"4":1,"null":0},"4":{"1":0,"2":0,"3":0,"4":7,"null":1},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":31,"n":36,"low":0.713,"high":0.939}}},"needs_work":{"agree":{"k":35,"n":36,"low":0.858,"high":0.995}}},{"kind":"changed-rubric","a":"claude-opus-5-5 @ handoff-v6","b":"claude-opus-5-5 @ handoff-v9","messages":81,"questions":{"intent":{"table":{"1":{"1":0,"2":0,"3":0,"4":0,"null":0},"2":{"1":0,"2":2,"3":5,"4":1,"null":0},"3":{"1":0,"2":1,"3":12,"4":9,"null":0},"4":{"1":0,"2":0,"3":3,"4":48,"null":0},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":62,"n":81,"low":0.662,"high":0.844}},"content":{"table":{"1":{"1":0,"2":0,"3":0,"4":0,"null":0},"2":{"1":1,"2":18,"3":5,"4":0,"null":0},"3":{"1":0,"2":6,"3":17,"4":4,"null":0},"4":{"1":0,"2":1,"3":5,"4":24,"null":0},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":59,"n":81,"low":0.623,"high":0.813}},"presentation":{"table":{"1":{"1":11,"2":5,"3":0,"4":0,"null":0},"2":{"1":2,"2":32,"3":5,"4":0,"null":0},"3":{"1":0,"2":0,"3":7,"4":2,"null":0},"4":{"1":0,"2":0,"3":0,"4":17,"null":0},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":67,"n":81,"low":0.731,"high":0.894}},"lowest":{"table":{"1":{"1":11,"2":5,"3":0,"4":0,"null":0},"2":{"1":2,"2":35,"3":2,"4":0,"null":0},"3":{"1":0,"2":0,"3":10,"4":0,"null":0},"4":{"1":0,"2":0,"3":1,"4":15,"null":0},"null":{"1":0,"2":0,"3":0,"4":0,"null":0}},"exact":{"k":71,"n":81,"low":0.787,"high":0.932}}},"needs_work":{"agree":{"k":79,"n":81,"low":0.914,"high":0.993}}}],"rewrites":{"with_rewrite":53,"with_unclear":22,"ratio":{"min":1.114,"q1":1.252,"median":1.366,"q3":1.43,"max":1.967}}}</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById("data").textContent);
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return n.toLocaleString("en-US"); };
+  var pct = function (k, n) { return n ? Math.round((100 * k) / n) + "%" : "n/a"; };
+  var kn = function (v) { return v ? fmt(v.k) + " of " + fmt(v.n) : "none"; };
+  var ci = function (v) { return Math.round(v.low * 100) + " to " + Math.round(v.high * 100) + "%"; };
+  var esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); };
+  var SCORE = { 1: "1 Broken", 2: "2 Costly", 3: "3 Minor", 4: "4 Clean" };
+
+  $("asof").textContent = D.as_of;
+
+  // tiles
+  var last = D.drift.pooled[4].blocked, first = D.drift.pooled[0].blocked;
+  var tiles = [
+    [pct(D.needs_work.k, D.needs_work.n), "of handoffs need work", kn(D.needs_work) + " in the fair sample, 95% interval " + ci(D.needs_work)],
+    [pct(D.cause.by_dimension.presentation, D.cause.needs_work), "of those fail on presentation", D.cause.by_dimension.presentation + " of " + D.cause.needs_work + " have Costly or Broken presentation"],
+    [pct(first.k, first.n) + " to " + pct(last.k, last.n), "blocked, first to last fifth of a sender's thread", kn(first) + " rising to " + kn(last)],
+    [pct(D.screening.blocked_low.k, D.screening.blocked_low.n), "of unreadable handoffs blocked by the hook", kn(D.screening.blocked_low) + " with Costly or Broken presentation"]
+  ];
+  $("tiles").innerHTML = tiles.map(function (t) { return '<div class="tile"><b>' + t[0] + "</b><span>" + t[1] + "</span><small>" + t[2] + "</small></div>"; }).join("");
+
+  // stacked score bars
+  function stack(counts) {
+    var total = [1, 2, 3, 4].reduce(function (a, s) { return a + (counts[s] || 0); }, 0);
+    return '<div class="stack">' + [1, 2, 3, 4].map(function (s) {
+      var k = counts[s] || 0; if (!k) return "";
+      return '<div class="c' + s + '" style="flex:' + k + '" title="' + SCORE[s] + ": " + k + " of " + total + " (" + pct(k, total) + ')">' + (k / total > 0.05 ? k : "") + "</div>";
+    }).join("") + "</div>";
+  }
+  $("nw").textContent = kn(D.needs_work) + " (" + pct(D.needs_work.k, D.needs_work.n) + ", 95% interval " + ci(D.needs_work) + ")";
+  var low = {}; [1, 2, 3, 4].forEach(function (s) { low[s] = D.lowest[s].k; });
+  $("lowest").innerHTML = stack(low) + '<div class="legend">' + [1, 2, 3, 4].map(function (s) { return '<span><i class="c' + s + '"></i>' + SCORE[s] + ": " + kn(D.lowest[s]) + " (" + ci(D.lowest[s]) + ")</span>"; }).join("") + "</div>";
+  $("dims").innerHTML = ["intent", "content", "presentation"].map(function (d) {
+    return '<div class="stackrow"><div>' + d[0].toUpperCase() + d.slice(1) + "</div>" + stack(D.dimensions[d]) + "</div>";
+  }).join("");
+
+  // generic bar rows
+  function track(v, cls, withCi) {
+    if (!v || !v.n) return '<div class="track none" title="No handoffs"></div>';
+    var w = (100 * v.k) / v.n;
+    return '<div class="track" title="' + kn(v) + " (" + pct(v.k, v.n) + ')"><div class="bar ' + cls + '" style="width:' + w + '%"></div>' +
+      (withCi && v.low !== undefined ? '<div class="ci" style="left:' + v.low * 100 + "%;width:" + (v.high - v.low) * 100 + '%"></div>' : "") + "</div>";
+  }
+  var val = function (v) { return v && v.n ? fmt(v.k) + "/" + fmt(v.n) + " · " + pct(v.k, v.n) : "none"; };
+
+  // cause
+  var C = D.cause;
+  $("causeText").innerHTML = "Of the " + C.needs_work + " handoffs that need work, <b>" + C.by_dimension.presentation + " have Costly or Broken presentation</b>, " + C.by_dimension.content + " have it on content and " + C.by_dimension.intent + " on intent. Only " + C.intent_content_only + " are readable but still fail on intent or content, which is the part no mechanical check can see.";
+  $("combos").innerHTML = C.combinations.map(function (c) {
+    var v = { k: c.k, n: C.needs_work };
+    return '<div class="lab">' + c.dimensions.join(" + ") + "</div>" + track(v, "cr") + '<div class="val">' + c.k + " of " + C.needs_work + "</div>";
+  }).join("");
+  var seen = D.issues.filter(function (i) { return i.k > 0; }), dimNow = "";
+  $("issues").innerHTML = ["presentation", "content", "intent"].map(function (d) {
+    return '<div class="sub">' + d + "</div>" + seen.filter(function (i) { return i.dimension === d; }).sort(function (a, b) { return b.k - a.k; }).map(function (i) {
+      return '<div class="lab type">' + i.kind + "</div>" + track(i, "cr", true) + '<div class="val">' + i.k + " · " + pct(i.k, i.n) + "</div>";
+    }).join("");
+  }).join("");
+  $("issueNote").innerHTML = "Never marked in this sample: " + D.issues.filter(function (i) { return !i.k; }).map(function (i) { return "<code>" + i.kind + "</code>"; }).join(", ") + ".";
+
+  // sources
+  function breakdown(id, rows, opts) {
+    opts = opts || {};
+    $(id).innerHTML = rows.map(function (r) {
+      var none = !r.inputs;
+      var out = '<div class="lab' + (opts.type ? " type" : "") + '" style="grid-row:span 2;align-self:start">' + esc(r.key) + '<div class="muted" style="font-family:var(--sans);font-size:0.75rem">' + (none ? "no handoffs" : fmt(r.inputs) + " handoffs") + "</div></div>";
+      out += track(r.blocked, "ch") + '<div class="val">' + (none ? "" : val(r.blocked)) + "</div>";
+      var enough = r.needs_work && r.reviewed >= 5;
+      out += (enough ? track(r.needs_work, "cr", true) : '<div class="track none"></div>') + '<div class="val">' + (enough ? val(r.needs_work) : none ? "" : '<span class="muted">' + r.reviewed + " reviewed</span>") + "</div>";
+      return out;
+    }).join("");
+  }
+  breakdown("byModel", D.by_model.filter(function (r) { return r.inputs > 1; }), { type: true });
+  breakdown("byModelThread", D.by_model_thread.filter(function (r) { return r.inputs > 1; }), { type: true });
+  breakdown("byProject", D.by_project);
+  breakdown("byMonth", D.by_month);
+  breakdown("bySize", D.by_size);
+  var sol = D.by_model.filter(function (r) { return r.key === "gpt-6.1-sol"; })[0], old = D.by_model.filter(function (r) { return r.key === "gpt-5.5"; })[0];
+  var solT = D.by_model_thread[0];
+  $("sourceText").innerHTML = "The shorthand is not spread evenly. Among handoffs with a model recorded at send time, the hook blocks <b>" + kn(sol.blocked) + " from <code>" + sol.key + "</code></b> and " + kn(old.blocked) + " from <code>" + old.key + "</code>. Reviewers found that " + kn(sol.needs_work) + " of the first group need work and " + kn(old.needs_work) + " of the second. Counting thread settings as well, all " + solT.needs_work.k + " handoffs that need work in the fair sample come from threads set to <code>" + solT.key + "</code>. Nothing sent before October 2026 is blocked, and longer messages are worse.";
+
+  // drift
+  var Dr = D.drift, pl = Dr.pooled;
+  $("driftText").innerHTML = "Take every handoff one sender thread sent, in order, and cut the list into fifths. Across the " + Dr.threads.length + " threads that sent " + Dr.min_handoffs + " or more handoffs (" + fmt(Dr.qualifying_handoffs) + " handoffs), the hook blocks <b>" + pct(first.k, first.n) + " of the first fifth and " + pct(last.k, last.n) + " of the last</b>. The reviewers' share with Costly or Broken presentation moves the same way, from " + kn(pl[0].presentation_low) + " to " + kn(pl[4].presentation_low) + ". The block rate rises by 10 points or more from the first half to the second in " + Dr.rising + " of the " + Dr.threads.length + " threads and falls in " + (Dr.falling || "none") + ". The other two were at 97% or above from the start.";
+  (function () {
+    var W = 460, H = 250, L = 34, T = 14, B = 44, pw = (W - L - 8) / 5, ph = H - T - B, y = function (p) { return T + ph * (1 - p); };
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Hook block rate and reviewer share by fifth of thread">';
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (g) { s += '<line class="gl" x1="' + L + '" x2="' + (W - 8) + '" y1="' + y(g) + '" y2="' + y(g) + '"/><text x="' + (L - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end">' + g * 100 + "%</text>"; });
+    pl.forEach(function (p, i) {
+      var x = L + i * pw, bw = pw * 0.46, bx = x + pw * 0.14, hp = p.blocked.k / p.blocked.n, r = p.presentation_low, rx = bx + bw + pw * 0.18;
+      s += '<path fill="var(--hook)" d="M' + bx + " " + y(0) + "V" + (y(hp) + 3) + "q0 -3 3 -3H" + (bx + bw - 3) + "q3 0 3 3V" + y(0) + 'z"><title>Fifth ' + p.part + ": hook blocked " + kn(p.blocked) + " (" + pct(p.blocked.k, p.blocked.n) + ")</title></path>";
+      s += '<text class="v" x="' + (bx + bw / 2) + '" y="' + (y(hp) - 5) + '" text-anchor="middle">' + pct(p.blocked.k, p.blocked.n) + "</text>";
+      if (r) {
+        s += '<line stroke="var(--reviewer)" stroke-width="2" x1="' + rx + '" x2="' + rx + '" y1="' + y(r.low) + '" y2="' + y(r.high) + '"/>';
+        s += '<circle cx="' + rx + '" cy="' + y(r.k / r.n) + '" r="5" fill="var(--reviewer)" stroke="var(--ground)" stroke-width="2"><title>Fifth ' + p.part + ": reviewers found Costly or Broken presentation in " + kn(r) + " (95% interval " + ci(r) + ")</title></circle>";
+      }
+      s += '<text x="' + (x + pw / 2) + '" y="' + (H - B + 16) + '" text-anchor="middle">' + ["First", "Second", "Third", "Fourth", "Last"][i] + '</text><text x="' + (x + pw / 2) + '" y="' + (H - B + 30) + '" text-anchor="middle">' + (r ? r.k + "/" + r.n + " rev." : "") + "</text>";
+    });
+    $("driftChart").innerHTML = s + "</svg>";
+  })();
+  $("threads").innerHTML = '<thead><tr><th>Thread</th><th>Mission</th><th class="n">Handoffs</th><th>By fifth</th><th class="n">First half</th><th class="n">Second half</th></tr></thead><tbody>' + Dr.threads.map(function (t) {
+    return "<tr><td>" + t.key + "</td><td>" + t.mission.replace("Mission ", "") + '</td><td class="n">' + t.handoffs + '</td><td><div class="spark" title="' + t.parts.map(function (p) { return pct(p.k, p.n); }).join(", ") + '">' + t.parts.map(function (p) { return '<i style="height:' + Math.max(3, (100 * p.k) / p.n) + '%"></i>'; }).join("") + '</div></td><td class="n">' + pct(t.first_half.k, t.first_half.n) + '</td><td class="n">' + pct(t.second_half.k, t.second_half.n) + "</td></tr>";
+  }).join("") + "</tbody>";
+  $("driftNote").innerHTML = "Hook figures are exact counts. Reviewer figures rest on " + pl.map(function (p) { return p.reviewed; }).join(", ") + " reviewed handoffs per fifth. Position counts handoffs sent, and a later position also means a longer session and more accumulated context, so this shows that the writing drifts, not why. " + fmt(Dr.without_sender) + " handoffs name no sender thread and are left out. The hook's block rate stands in for shorthand and misses part of it.";
+
+  // missions
+  var M = D.missions, top = M.top[0];
+  $("missionText").innerHTML = "The corpus has " + M.count + " missions, but <b>Mission A alone sent " + fmt(top.inputs) + " of the " + fmt(D.corpus.inputs) + " handoffs (" + pct(top.inputs, D.corpus.inputs) + ")</b> over five days. The three busiest days hold " + fmt(M.busiest_days.reduce(function (a, d) { return a + d.n; }, 0)) + " handoffs between them. Missions differ sharply: the three largest are blocked 71% to 99% of the time, while the fourth is blocked 12%.";
+  $("missionTable").innerHTML = '<thead><tr><th>Mission</th><th>Days</th><th class="n">Handoffs</th><th class="n">Blocked by hook</th><th style="width:22%"></th><th class="n">Needs work (fair sample)</th></tr></thead><tbody>' + M.top.map(function (m) {
+    return "<tr><td>" + m.key + "</td><td>" + m.first_day + (m.last_day !== m.first_day ? " to " + m.last_day.slice(5) : "") + '</td><td class="n">' + fmt(m.inputs) + '</td><td class="n">' + val(m.blocked) + "</td><td>" + track(m.blocked, "ch") + '</td><td class="n">' + (m.reviewed ? m.needs_work.k + " of " + m.reviewed : '<span class="muted">none reviewed</span>') + "</td></tr>";
+  }).join("") + "</tbody>";
+  breakdown("missionDays", top.days);
+
+  // hook
+  var S = D.screening, cells = S.cells;
+  $("hookText").innerHTML = "The hook measures spacing, size and repetition, so it is judged against the presentation score alone. On the fair sample it <b>blocks " + kn(S.blocked_low) + " handoffs with Costly or Broken presentation</b> (95% interval " + ci(S.blocked_low) + ") and allows " + kn(S.allowed_high) + " of those that are Minor or Clean (" + ci(S.allowed_high) + "). " + S.outside.k + " of the " + S.outside.needs_work + " handoffs that need work are outside what it can see: they read well and fail on intent or content. Over the whole corpus it blocks " + fmt(S.corpus_blocked.k) + " of " + fmt(S.corpus_blocked.n) + " (" + pct(S.corpus_blocked.k, S.corpus_blocked.n) + ").";
+  var g = '<div class="h"></div>' + [1, 2, 3, 4].map(function (s) { return '<div class="h">' + SCORE[s] + "</div>"; }).join("");
+  [["blocked", "Blocked"], ["allowed", "Allowed"]].forEach(function (r) {
+    g += '<div class="h l">' + r[1] + "</div>" + [1, 2, 3, 4].map(function (s) {
+      var k = cells[r[0]][s], cls = !k ? "zero" : r[0] === "allowed" && s <= 2 ? "miss" : r[0] === "blocked" && s >= 3 ? "fp" : "";
+      return '<div class="' + cls + '">' + k + "</div>";
+    }).join("");
+  });
+  $("confusion").innerHTML = g;
+  var NAMES = { characters: "Size over 12,000 characters", fused_words: "Fused words", missing_spaces: "Missing spaces", glued_values: "Glued values", punctuation_spacing: "Punctuation spacing (advisory)", needless_shorthand: "Bracket or plus-sign shorthand (advisory)" };
+  $("checks").innerHTML = S.checks.map(function (c) {
+    var k = c.corpus.block || c.corpus.warn || 0, v = { k: k, n: D.corpus.inputs };
+    return '<div class="lab">' + (NAMES[c.rule] || c.rule) + "</div>" + track(v, c.corpus.block ? "ch" : "cu") + '<div class="val">' + fmt(k) + " · " + pct(k, v.n) + "</div>";
+  }).join("");
+  $("checkNote").innerHTML = "A handoff can trip several checks, so the bars overlap. Blue checks block. Grey checks only warn, and nearly all of their warnings land on handoffs another check already blocks. The two repetition checks never fire in this corpus.";
+
+  // agreement
+  var QN = { intent: "Intent", content: "Content", presentation: "Presentation", lowest: "Lowest score" };
+  var A0 = D.agreement[0], A1 = D.agreement[1];
+  $("agreeText").innerHTML = "A second model scored " + A0.messages + " of the same handoffs without seeing the first review. The two <b>agree on whether a handoff needs work in " + kn(A0.needs_work.agree) + "</b>, and never differ by more than one level on presentation. They agree less on content (" + kn(A0.questions.content.exact) + " exact) and on which unreadable handoffs are Broken rather than Costly. When the rubric changed from v6 to v9, the same reviewer kept its needs-work call on " + kn(A1.needs_work.agree) + ".";
+  $("agreeTables").innerHTML = D.agreement.map(function (c) {
+    return "<h3>" + (c.kind === "different-raters" ? "Two reviewers, same rubric: " : "One reviewer, changed rubric: ") + '<span class="type">' + c.a + "</span> against <span class=\"type\">" + c.b + "</span>, " + c.messages + ' handoffs</h3><div class="agree">' + Object.keys(QN).map(function (q) {
+      var t = c.questions[q].table, h = '<div class="grid" style="grid-template-columns:18px repeat(4,1fr)"><div class="h"></div>' + [1, 2, 3, 4].map(function (s) { return '<div class="h">' + s + "</div>"; }).join("");
+      [1, 2, 3, 4].forEach(function (a) { h += '<div class="h">' + a + "</div>" + [1, 2, 3, 4].map(function (b) { var k = t[a][b]; return '<div class="' + (a === b ? "diag " : "") + (k ? "" : "zero") + '">' + k + "</div>"; }).join(""); });
+      var e = c.questions[q].exact;
+      return '<div><div class="t">' + QN[q] + "</div>" + h + '</div><div class="e">Exact: ' + e.k + "/" + e.n + " (" + ci(e) + ")</div></div>";
+    }).join("") + "</div>";
+  }).join("");
+
+  // rewrite cost
+  var R = D.rewrites, q = R.ratio;
+  $("costText").innerHTML = "The shorthand does save characters. The reviewer's plain-English version of a hard-to-read handoff is <b>" + Math.round((q.median - 1) * 100) + "% longer at the median</b>, and between " + Math.round((q.min - 1) * 100) + "% and " + Math.round((q.max - 1) * 100) + "% longer across " + R.with_rewrite + " rewrites. Put the other way, the sender saved roughly a quarter of the characters. The price is that in <b>" + R.with_unclear + " of the " + R.with_rewrite + " rewrites the reviewer could not decode at least one passage</b> and had to mark it unclear.";
+  (function () {
+    var W = 520, H = 70, L = 10, R2 = 10, lo = 1, hi = 2, x = function (v) { return L + ((v - lo) / (hi - lo)) * (W - L - R2); };
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Rewrite length ratio: minimum, quartiles and maximum">';
+    [1, 1.25, 1.5, 1.75, 2].forEach(function (t) { s += '<line class="gl" x1="' + x(t) + '" x2="' + x(t) + '" y1="8" y2="44"/><text x="' + x(t) + '" y="60" text-anchor="middle">' + (t === 1 ? "same length" : "+" + Math.round((t - 1) * 100) + "%") + "</text>"; });
+    s += '<line stroke="var(--reviewer)" stroke-width="2" x1="' + x(q.min) + '" x2="' + x(q.max) + '" y1="26" y2="26"/>';
+    s += '<rect x="' + x(q.q1) + '" y="14" width="' + (x(q.q3) - x(q.q1)) + '" height="24" rx="3" fill="var(--reviewer)"><title>Middle half of rewrites: ' + Math.round((q.q1 - 1) * 100) + "% to " + Math.round((q.q3 - 1) * 100) + "% longer</title></rect>";
+    s += '<line stroke="var(--ground)" stroke-width="2" x1="' + x(q.median) + '" x2="' + x(q.median) + '" y1="14" y2="38"/>';
+    $("ratio").innerHTML = s + "</svg>" + '<div class="legend"><span>Line: shortest to longest (+' + Math.round((q.min - 1) * 100) + "% to +" + Math.round((q.max - 1) * 100) + "%)</span><span>Box: middle half (+" + Math.round((q.q1 - 1) * 100) + "% to +" + Math.round((q.q3 - 1) * 100) + "%)</span><span>Gap: median (+" + Math.round((q.median - 1) * 100) + "%)</span></div>";
+  })();
+})();
+</script>
+</body>
+</html>

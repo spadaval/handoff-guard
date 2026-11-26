@@ -60,6 +60,10 @@ message or more, their words count toward the average word length.
 
 ### What the evidence supports
 
+[The findings](docs/findings/README.md) cover the whole corpus: how many
+handoffs need work, where they come from and how a sender's writing drifts.
+This section covers the hook alone.
+
 86 reviewed handoffs form a fair sample of the corpus. Claude Opus scored each
 under the rubric, and the hook is judged against the presentation score, which
 is the only thing it can see. On the fair sample the checks block:
@@ -207,7 +211,8 @@ and model assessments.
 Controls stay as files: [config/](config/), [the rubric](docs/communication-rubric.md),
 [review instructions](docs/review-instructions/) and executable source. Messages,
 provenance, recovered context, labels, samples, diagnostics and every derived
-result stay in `data/handoffs.sqlite3`. This includes aggregate reports.
+result stay in `data/handoffs.sqlite3`. This includes aggregate reports, apart
+from the sanitized [findings report](docs/findings/README.md).
 
 ```sh
 node scripts/handoff.ts validate

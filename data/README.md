@@ -39,6 +39,12 @@ No real messages, excerpts, derived labels, charts, reports or aggregate results
 belong in Git. Backend test fixtures are invented. Do not copy historical text
 into a regression fixture without replacing it with a synthetic example.
 
-The one exception is the rubric. It may quote short fragments of real handoffs
-as examples after names, identifiers, hashes and anything else sensitive have
-been replaced.
+There are two exceptions.
+
+- The rubric may quote short fragments of real handoffs as examples after
+  names, identifiers, hashes and anything else sensitive have been replaced.
+- [`docs/findings/`](../docs/findings/README.md) is a dated findings report. It
+  holds counts and shares only, with project, mission and thread names
+  replaced, and quotes no message text beyond the rubric's examples.
+  `scripts/findings-data.ts` builds its data and refuses to write an
+  identifying name. See [how it is published](../docs/findings/methodology.md#publishing-these-findings).

@@ -11,6 +11,10 @@ particular headings, or an Atelier-specific task line.
   files. Keep messages and everything derived from them in the ignored SQLite
   database: context, labels, scores, samples, diagnostics and reports, including
   aggregates. Do not add loose durable data exports or experiment directories.
+- The one exception is `docs/findings/`: a dated findings report with counts
+  and shares only, built by `scripts/findings-data.ts`. Project, mission and
+  thread names are replaced, and it quotes no message text beyond the rubric's
+  own examples. Do not widen it or add a second one.
 - Do not commit real corpus messages or copy them into fixtures. Use invented
   text there. The rubric may quote short fragments of real handoffs as
   examples, once names, identifiers, hashes and anything else sensitive have
@@ -57,5 +61,6 @@ variables and `docs/context-dashboard.md` for what each figure means.
   and usability by viewing and using the rendered page. Compiler diagnostics
   are separate from visual review. Backend and Rust checks remain appropriate.
 - Keep SQLite databases and their automatic WAL/SHM files out of Git. Do not
-  commit message-derived reports, charts, labels or screenshots, even aggregates.
+  commit message-derived reports, charts, labels or screenshots, even aggregates,
+  outside the sanitized report in `docs/findings/`.
   Temporary exports must be explicit and disposable; SQLite is authoritative.

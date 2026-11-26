@@ -165,7 +165,8 @@ diagnostics are checked before committing. SQLite VACUUM then reclaims pages.
 
 New calibration runs retain frozen sample measurements rather than another full
 copy of every inspection result. Integration fixtures do not append traces to
-the research database. Raw data and aggregate results remain out of Git.
+the research database. Raw data and aggregate results remain out of Git, apart
+from the sanitized report in [findings/](findings/README.md).
 
 `handoff.ts export --snapshot PATH` remains an explicit optional legacy
 export for outside tools. It is not part of the dashboard or normal workflow.
