@@ -211,8 +211,8 @@ and model assessments.
 Controls stay as files: [config/](config/), [the rubric](docs/communication-rubric.md),
 [review instructions](docs/review-instructions/) and executable source. Messages,
 provenance, recovered context, labels, samples, diagnostics and every derived
-result stay in `data/handoffs.sqlite3`. This includes aggregate reports, apart
-from the sanitized [findings report](docs/findings/README.md).
+result stay in `data/handoffs.sqlite3`. Analysis written up for readers, with
+identifying detail replaced, is tracked in [docs/findings/](docs/findings/README.md).
 
 ```sh
 node scripts/handoff.ts validate

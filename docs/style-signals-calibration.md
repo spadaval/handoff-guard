@@ -40,5 +40,6 @@ node scripts/handoff.ts calibrate summarize --run style-signals-v3
 node scripts/handoff.ts review records style-signals-v3 label
 ```
 
-All measurements, findings and reports, including aggregates, stay out of Git. This document
-defines the procedure rather than carrying results.
+Per-message measurements and labels stay out of Git. Findings worth keeping are
+written up in [findings/](findings/README.md) with identifying detail replaced.
+This document defines the procedure rather than carrying results.

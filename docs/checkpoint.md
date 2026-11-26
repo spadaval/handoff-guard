@@ -17,8 +17,8 @@ rule-specific labels, candidate/false-positive review and frozen evaluation on
 reserved thread components. See [the calibration procedure](style-signals-calibration.md).
 
 A fresh clone contains the tools, controls and invented backend fixtures. It
-does not contain the dataset or results, apart from the sanitized
-[findings report](findings/README.md). Supply the local database separately
+does not contain the dataset. The analysis is written up in the
+[findings report](findings/README.md) with identifying detail replaced. Supply the local database separately
 when continuing research. Git does not back up the ignored database. Previous
 commits may still contain older aggregate reports; their removal from the
 current tree does not rewrite Git history.

@@ -186,8 +186,9 @@ Nothing is precomputed or exported.
 
 ## Publishing these findings
 
-Messages and everything derived from them stay in the ignored SQLite database.
-This directory is the one exception, and it is deliberately narrow.
+Full, unedited messages stay in the ignored SQLite database and never enter
+Git. Analysis may be committed once identifying detail is replaced. This is
+how that was done here.
 
 - `node scripts/findings-data.ts --write` rebuilds the JSON block in
   `report.html` through the dashboard API. It writes counts and shares only.

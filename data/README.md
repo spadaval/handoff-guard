@@ -6,7 +6,7 @@ There are two kinds of project material:
   `config/`, rubrics, review instructions and documentation about using the tools.
 - **Ignored SQLite database:** exact messages, provenance, recovered context,
   frozen sample/split assignments, human/model labels, scores, diagnostics,
-  experiment results and reports. Aggregates are derived data too; keep them here.
+  experiment results and working reports.
 
 `handoffs.sqlite3` is the single durable data store. Its automatic `-wal`
 and `-shm` companions are SQLite internals, not separate datasets. Never delete
@@ -35,16 +35,15 @@ To capture a different corpus, use `node scripts/handoff.ts capture --database P
 with a **new** database path. Capture writes directly to SQLite without intermediate CSV or JSONL files. Existing samples, labels and splits are never replaced.
 See [database operations](../docs/context-database.md).
 
-No real messages, excerpts, derived labels, charts, reports or aggregate results
-belong in Git. Backend test fixtures are invented. Do not copy historical text
-into a regression fixture without replacing it with a synthetic example.
+Full, unedited messages never belong in Git, and neither do per-message
+records such as labels and review packets. Backend test fixtures are invented.
+Do not copy historical text into a regression fixture without replacing it
+with a synthetic example.
 
-There are two exceptions.
-
-- The rubric may quote short fragments of real handoffs as examples after
-  names, identifiers, hashes and anything else sensitive have been replaced.
-- [`docs/findings/`](../docs/findings/README.md) is a dated findings report. It
-  holds counts and shares only, with project, mission and thread names
-  replaced, and quotes no message text beyond the rubric's examples.
-  `scripts/findings-data.ts` builds its data and refuses to write an
-  identifying name. See [how it is published](../docs/findings/methodology.md#publishing-these-findings).
+Analysis does belong in Git: findings, counts, shares, charts and written
+reports. [`docs/findings/`](../docs/findings/README.md) is the current one, and
+`scripts/findings-data.ts` builds its data. Before committing analysis,
+replace project, mission and thread names, identifiers, hashes and anything
+else sensitive. Short fragments of real handoffs may be quoted as examples
+after the same replacement, as the rubric does. See
+[how the findings are published](../docs/findings/methodology.md#publishing-these-findings).
