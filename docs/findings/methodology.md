@@ -31,12 +31,14 @@ argument of each call, and separately the output workers sent back.
 
 Capture treats everything as data. It never runs a recorded command or script,
 never fetches a link, and never changes the stores it reads or the active
-Codex configuration. A record it cannot use is written to a gaps table with
-the reason, not guessed at or dropped silently: 1,118 gaps were recorded,
-among them malformed tool arguments, prompts a store did not keep, and bodies
-stored encrypted.
+Codex configuration. What it cannot read is counted, not guessed at:
 
-The result is 86,004 **observations**, each one sighting of a message body in
+- 26,236 observations hold a body the store kept encrypted, 18,739 distinct
+  payloads. They are counted and set aside, so they are in no figure.
+- 1,118 gaps were written to a gaps table with their reason: 1,117 subagent
+  prompts that a store did not keep, and one malformed rollout line.
+
+The result is 86,004 readable **observations**, each one sighting of a message body in
 one store, with its source, time, thread, project and model fields as
 recorded.
 
@@ -93,8 +95,7 @@ or the passage with the main ask, in plain English, adding no facts and
 marking anything it could not decode as `[unclear: …]`.
 
 The rubric went through several versions. The current one is `handoff-v9`.
-Under the earlier `handoff-v6` reviewers wrote scores directly. Questions that
-ten reviewers split on were settled in the rubric's text along the way.
+Under the earlier `handoff-v6` reviewers wrote scores directly.
 
 ## 4. Sampling
 
@@ -164,6 +165,10 @@ Nothing is precomputed or exported.
   over all 3,464 handoffs are exact. Estimates from reviews carry a 95% Wilson
   interval. A group with fewer than 5 reviewed handoffs gets no reviewer
   figure.
+- **Where the failures lie.** The count for a question is the handoffs scoring
+  Broken or Costly on it. The report's chart of the lowest score is a
+  different cut: it shows only the question, or tied questions, holding each
+  handoff's worst score.
 - **Hook against reviewers.** The hook can only see spacing, size and
   repetition, so it is compared with the presentation score alone: the share
   blocked among Costly or Broken, and the share allowed among Minor or Clean.
@@ -195,8 +200,11 @@ how that was done here.
 - Project names become "Project A" and "Project B". Mission titles and IDs
   become "Mission A" to "Mission J". Thread titles and IDs become "Thread 1"
   to "Thread 15". Dates, sizes and model names are kept.
-- The script stops if a real project name, a mission or thread title, or any
-  long hexadecimal string appears in its output.
+- The script checks every string in the block before writing. Each must be a
+  label it made, a date, or a term from a fixed vocabulary: rubric questions
+  and issue kinds, hook rule names, size buckets, model names and rater names.
+  Anything else stops it. The check covers the data block only. The prose and
+  the Markdown files are checked by reading them.
 - No message text is taken from the database. The fragments shown are the
   rubric's worked examples, which were sanitized when they were added to the
   rubric.
@@ -210,12 +218,17 @@ To repeat the whole analysis on a different corpus:
 node scripts/handoff.ts capture --database data/new.sqlite3
 node scripts/handoff.ts split --database data/new.sqlite3    # before any tuning
 cargo build --release --locked
-node scripts/handoff.ts mechanics
-node scripts/handoff.ts review sample RUN --reviewer MODEL --mix pilot:3,random:6,fused:3,long:3
-node scripts/handoff.ts review packet RUN --out data/review-packets/RUN
-node scripts/handoff.ts review record RUN < review.json
+node scripts/handoff.ts mechanics --database data/new.sqlite3
+node scripts/handoff.ts review sample RUN --database data/new.sqlite3 --reviewer MODEL --mix random:9,fused:3,long:3
+node scripts/handoff.ts review packet RUN --database data/new.sqlite3 --out data/review-packets/RUN
+node scripts/handoff.ts review record RUN --database data/new.sqlite3 < review.json
 HANDOFF_DB=data/new.sqlite3 node scripts/findings-data.ts
 ```
+
+Every `handoff.ts` command needs `--database`, or it works on the default
+database. `findings-data.ts` takes its database from `HANDOFF_DB`. A new
+corpus has no `pilot` stratum, which holds handoffs from an earlier review
+round here.
 
 ## What this method cannot show
 

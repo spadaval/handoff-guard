@@ -135,9 +135,10 @@ const data = {
     allowed_high: share(fair.screening.allowed_high),
     outside: fair.screening.outside,
     checks: fair.screening.checks.map((c: any) => ({ rule: c.rule, corpus: c.corpus })),
+    // Both counts cover handoffs with a stored hook report, as the API's do.
     corpus_blocked: {
       k: fair.breakdowns.project.reduce((a: number, b: any) => a + (b.hook_blocked?.k ?? 0), 0),
-      n: meta.corpus.inputs,
+      n: fair.breakdowns.project.reduce((a: number, b: any) => a + (b.hook_blocked?.n ?? 0), 0),
     },
   },
   agreement: agreement.comparisons
@@ -148,7 +149,10 @@ const data = {
       b: c.b.reviewer + " @ " + c.b.rubric_version,
       messages: c.messages,
       questions: Object.fromEntries(
-        Object.entries<any>(c.questions).map(([q, v]) => [q, { table: v.table, exact: share(v.exact) }]),
+        Object.entries<any>(c.questions).map(([q, v]) => [
+          q,
+          { table: v.table, exact: share(v.exact), unknown_in_one: v.unknown_in_one },
+        ]),
       ),
       needs_work: { agree: share(c.needs_work.agree) },
     })),
@@ -167,15 +171,46 @@ const data = {
   },
 };
 
-// Refuse to publish if anything that names the work survived the replacement.
+// Refuse to publish any text this script did not expect. Every string in the
+// block must be a label made above, a date, or a term from a fixed vocabulary:
+// rubric questions and issue kinds, hook rule names, size buckets, model names
+// and rater names. A project, mission or thread name matches none of these.
+// First, the corpus block rate is only meaningful when every handoff has a report.
+invariant(
+  data.screening.corpus_blocked.n === meta.corpus.inputs,
+  "Some handoffs have no stored hook report; run `node scripts/handoff.ts mechanics` first",
+);
+const vocabulary = new Set<string>([
+  "Unknown",
+  "Other",
+  "unknown",
+  "different-raters",
+  "changed-rubric",
+  ...meta.dimensions,
+  ...Object.values<string[]>(meta.issue_kinds).flat(),
+  ...fair.issues.map((i: any) => i.kind),
+  ...meta.hook.rules.map((r: any) => r.rule),
+  ...meta.size_buckets,
+  ...Object.values<any[]>(meta.facets.models).flatMap((list) => list.map((m) => m.value)),
+  ...meta.raters.map((r: any) => r.reviewer + " @ " + r.rubric_version),
+]);
+const real = new Set<string>(
+  [
+    ...projects.keys(),
+    ...fair.missions.top.flatMap((m: any) => [m.key, m.title]),
+    ...fair.drift.threads.flatMap((t: any) => [t.key, t.title, t.mission_title]),
+  ].filter((s) => typeof s === "string" && s !== "unknown"),
+);
+const label = /^(?:\d{4}-\d{2}(?:-\d{2})?|(?:Project|Mission) [A-Z]\d*|Thread \d+)$/;
+(function check(value: unknown): void {
+  if (typeof value === "string")
+    invariant(
+      !real.has(value) && (label.test(value) || vocabulary.has(value)),
+      "Unexpected text in the data block: " + JSON.stringify(value),
+    );
+  else if (value && typeof value === "object") Object.values(value).forEach(check);
+})(data);
 const json = JSON.stringify(data).replace(/</g, "\\u003c");
-const banned = [
-  ...[...projects.keys()].filter((k) => k !== "unknown"),
-  ...fair.missions.top.flatMap((m: any) => [m.key, m.title]),
-  ...fair.drift.threads.flatMap((t: any) => [t.key, t.title]),
-].filter((s) => typeof s === "string" && s.length > 3);
-for (const s of banned) invariant(!json.includes(s), "An identifying name reached the data block");
-invariant(!/[0-9a-f]{16}/.test(json), "A hash or ID reached the data block");
 
 if (process.argv.includes("--write")) {
   const html = readFileSync(REPORT, "utf8");

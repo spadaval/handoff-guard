@@ -23,10 +23,11 @@ Broken, meaning the recipient cannot reliably recover the meaning. 41 are
 Costly, meaning the recipient has to guess or reconstruct. 15 need a small fix
 and 15 are clean.
 
-**2. The problem is the writing, not the thinking.** Of the 56 that need work,
-53 fail on presentation, 16 on content and 2 on intent. Senders nearly always
-say what they want: intent is Clean or Minor in 83 of 86. Only 3 handoffs read
-well and still fail.
+**2. The problem is how they are written, not what they ask.** Of the 56 that
+need work, 53 score Broken or Costly on presentation, 28 on content and 3 on
+intent; a handoff can fail on more than one. Senders nearly always say what
+they want: intent is Clean or Minor in 83 of 86. Only 3 handoffs have Minor or
+Clean presentation and still need work.
 
 | Question | 1 Broken | 2 Costly | 3 Minor | 4 Clean |
 | --- | ---: | ---: | ---: | ---: |
@@ -74,8 +75,8 @@ need work in the shortest group and 12 of 13 in the longest reviewed group.
 blocks 52 of the 53 handoffs with Broken or Costly presentation and allows 25
 of the 33 that are Minor or Clean. The 8 Minor handoffs it blocks each have a
 hash glued to a word. It blocks 2,090 of the 3,464 handoffs in the corpus
-(60%). It cannot see the 3 handoffs that read well and fail on intent or
-content.
+(60%). It cannot see the 3 handoffs that need work with Minor or Clean
+presentation.
 
 **8. Two model reviewers agree on what needs work.** Gemini Neon scored 37 of
 the same handoffs independently and agreed with Claude Opus on needs work in
