@@ -9,8 +9,12 @@ particular headings, or an Atelier-specific task line.
   labels separate from size policy, and keep ambiguous examples ambiguous.
 - Keep full, unedited agent messages out of Git. They live only in the ignored
   SQLite database, along with the working data about each one: context,
-  labels, scores, samples and diagnostics. Do not add loose data exports or
-  experiment directories.
+  labels, scores, samples and diagnostics. Do not add loose data exports.
+- Experiment data lives as files under the ignored `data/experiments/`, one
+  folder per write-up in `docs/experiments/`, with the same name: sessions,
+  transcripts, cut points and model outputs. Do not leave it in a temp or
+  scratch directory, where a reboot loses it, and do not create experiment
+  directories anywhere else in the repository.
 - Analysis belongs in Git: findings, counts, shares, charts and written
   reports, such as `docs/findings/`. Before committing any, replace project,
   mission and thread names, identifiers, hashes and anything else sensitive.

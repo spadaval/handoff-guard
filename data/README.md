@@ -8,7 +8,13 @@ There are two kinds of project material:
   frozen sample/split assignments, human/model labels, scores, diagnostics,
   experiment results and working reports.
 
-`handoffs.sqlite3` is the single durable data store. Its automatic `-wal`
+- **Ignored experiment files:** `experiments/<name>/` holds the sessions,
+  transcripts and model outputs behind each write-up in
+  [`docs/experiments/`](../docs/experiments/README.md), under the same name.
+  They are files, not database rows, because the experiment tools read them
+  as files (for example `pi --fork` takes a session file).
+
+`handoffs.sqlite3` is the single durable store for the corpus. Its automatic `-wal`
 and `-shm` companions are SQLite internals, not separate datasets. Never delete
 those while connections are open. Back up a running database with SQLite's backup
 API, rather than copying or deleting its journal files.
