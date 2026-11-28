@@ -103,6 +103,10 @@ function rewritableField(input: Record<string, unknown>): string | null {
   return filled[0]!;
 }
 
+// Pi's idle prompt-cache refresh replays the conversation with a token budget
+// of one, which the Responses API raises to 16. No sender request is that small.
+const CACHE_REFRESH_MAX_OUTPUT_TOKENS = 64;
+
 /** Put the rewritten text into the sender's own record of its earlier tool calls. */
 function applyRewrites(messages: any[], rewrites: Map<string, { field: string; text: string }>): boolean {
   let changed = false;
@@ -147,11 +151,21 @@ export default function handoffGuard(pi: ExtensionAPI) {
     }
   });
 
-  // The rewrite reuses the sender's last request byte for byte, so the model
-  // provider serves the whole conversation from its prompt cache.
+  // The rewrite reuses the sender's last request, so the model provider serves
+  // the conversation from its prompt cache. Handlers run in extension load
+  // order, so an extension loaded after this one can still change the request
+  // that is sent; the README says to list this extension last.
   pi.on("before_provider_request", async (event) => {
     const payload = event.payload as Record<string, any> | undefined;
-    parentPayload = payload && Array.isArray(payload.input) ? structuredClone(payload) : null;
+    if (!payload || !Array.isArray(payload.input)) {
+      parentPayload = null;
+      return;
+    }
+    // A cache refresh can arrive while a tool runs. Replaying it would give the
+    // editor its tiny budget and cut the rewrite short, so keep the sender's.
+    const budget = payload.max_output_tokens;
+    if (typeof budget === "number" && budget <= CACHE_REFRESH_MAX_OUTPUT_TOKENS) return;
+    parentPayload = structuredClone(payload);
   });
 
   /** One tool-free model call that continues the sender's conversation with the editor prompt. */
@@ -226,18 +240,26 @@ export default function handoffGuard(pi: ExtensionAPI) {
       }
       if ("text" in result && result.text) {
         const after = guard(event.toolName, { ...input, [field]: result.text });
-        if (!after.denied) {
+        // A draft the guard denied is replaced only by text the guard has
+        // passed. If the guard never ran, there was no denial to clear.
+        if (after.ran ? !after.denied : !before.ran) {
           input[field] = result.text;
           // A nested call has no entry of its own in the conversation: the
           // draft sits inside the calling script, which is left as written.
           if (!nested) {
             rewrites.set(event.toolCallId, { field, text: result.text });
-            pi.appendEntry(ENTRY_TYPE, { toolCallId: event.toolCallId, field, text: result.text });
+            try {
+              pi.appendEntry(ENTRY_TYPE, { toolCallId: event.toolCallId, field, text: result.text });
+            } catch (error) {
+              // The handoff still goes out rewritten, and this process keeps
+              // showing the sender the rewrite. Only a later resume loses it.
+              record.persistFailed = error instanceof Error ? error.message : String(error);
+            }
           }
           log({ event: "rewritten", ...record, rewrittenChars: result.text.length, rewritten: result.text, latencyMs: result.latencyMs, usage: result.usage });
           return;
         }
-        record.rewriteDiscarded = { rule: after.rule, rewritten: result.text };
+        record.rewriteDiscarded = { ran: after.ran, rule: after.rule, rewritten: result.text };
       } else if ("failure" in result) {
         record.rewriteFailed = result.failure;
         warnOnce(ctx, `Handoff Guard could not rewrite a handoff: ${result.failure}. Flagged handoffs are blocked instead.`);
@@ -265,5 +287,14 @@ export default function handoffGuard(pi: ExtensionAPI) {
     for (const key of ["messagesToSummarize", "turnPrefixMessages"]) {
       if (Array.isArray(preparation?.[key])) applyRewrites(preparation[key], rewrites);
     }
+  });
+
+  // And for the branch a /tree navigation summarizes, which Pi reads from the
+  // saved entries without going through the context handler.
+  pi.on("session_before_tree", async (event) => {
+    if (rewrites.size === 0) return;
+    const entries = (event.preparation as any)?.entriesToSummarize;
+    if (!Array.isArray(entries)) return;
+    applyRewrites(entries.map((entry: any) => entry?.message).filter(Boolean), rewrites);
   });
 }

@@ -28,8 +28,8 @@ Pi 1.7.0 is the version this was tested with.
    ```
 
 2. Keep this repository checked out at a stable path, and add the extension
-   directory to `extensions` in `~/.pi/agent/settings.json`, keeping any
-   entries already there:
+   directory to `extensions` in `~/.pi/agent/settings.json`. Keep any entries
+   already there, and put this one last:
 
    ```json
    {
@@ -72,8 +72,12 @@ extension.
 - **The editing call fails, times out or returns no `<rewritten>` text.** A
   flagged draft is blocked, as in `block` mode. An unflagged draft is sent as
   written.
-- **The edited text is itself flagged.** It is thrown away and the draft is
-  treated the same way.
+- **The edited text is itself flagged, or the guard fails while checking it.**
+  It is thrown away and the draft is treated the same way. A draft the guard
+  flagged is only ever replaced by text the guard has passed.
+- **The rewrite cannot be saved to the session.** The handoff still goes out
+  rewritten, and the sender is shown the rewrite until Pi restarts. After a
+  resume it sees that one draft again.
 - **The guard executable is missing or fails.** Handoffs are not checked, and
   Pi shows one warning. Editing by length still runs. This matches the Codex
   hook, which also lets handoffs through when its command cannot run.
@@ -90,11 +94,18 @@ extension.
 - **Messages with text in more than one place.** If a call has more than one of
   `message`, `task` and `prompt`, or an `items` list, it is checked and can be
   blocked, but it is not edited.
+- **Extensions listed after this one.** The editing call replays the sender's
+  request as this extension saw it. An extension that loads later and changes
+  the request, for example by adding instructions, changes what the sender
+  gets but not what the editor gets, and can cost the prompt cache. That is
+  why this extension goes last. T3 Code's own extension is outside your
+  settings; it only sets a service tier and, for one provider, an output limit.
 - **Child completion reports.** A child's final answer is not a tool call, so
   it is neither checked nor edited. The Codex hook has the same gap.
 - **The session file.** Pi's saved session keeps the draft as the model wrote
   it. The edited text is stored beside it and is what the model is shown, also
-  after a resume and through compaction.
+  after a resume, through compaction, and in the summary of a branch left with
+  `/tree`.
 - The editing call costs one extra model request per edited handoff. In the
   experiment it took 7 to 10 seconds and about half a cent, with the sender's
   whole conversation read from the prompt cache.
@@ -105,7 +116,8 @@ extension.
 with this extension against a local scripted model, with a stand-in for T3
 Code's tools that records what is delivered. It makes no remote model requests
 and does not read or change your Pi settings. The scenarios are `rewrite`,
-`block`, `rewrite-fails`, `observe`, `resume` and `codemode`.
+`length`, `block`, `rewrite-fails`, `recheck-fails`, `observe`, `resume`, `tree`
+and `codemode`. They do not cover a real compaction or Pi's idle cache refresh.
 
 The test does not run the real T3 Code server. T3 Code registers its tools in
 Pi as `mcp__t3-code__<tool>`, which is what the stand-in uses. After installing,

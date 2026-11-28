@@ -8,7 +8,17 @@ import { ROOT, checksum, invariant } from "./shared.ts";
 import { scriptedModel } from "./hook-test.ts";
 import type { SourceRecord } from "./capture.ts";
 
-export const PI_SCENARIOS = ["rewrite", "block", "rewrite-fails", "observe", "resume", "codemode"];
+export const PI_SCENARIOS = [
+  "rewrite",
+  "length",
+  "block",
+  "rewrite-fails",
+  "recheck-fails",
+  "observe",
+  "resume",
+  "tree",
+  "codemode",
+];
 
 // Invented text. The draft runs words together, which the guard blocks.
 const DRAFT =
@@ -18,6 +28,8 @@ const DRAFT =
 const REWRITTEN =
   "Please inspect the parser implementation and report the regression. Summarize the failing assertions and their likely causes, then propose the smallest fix and the command that verifies it.";
 const ORDINARY = "Please run the parser tests and tell me which ones fail.";
+// Passes the guard, but is long enough to be edited in `rewrite` mode.
+const LONG = Array.from({ length: 12 }, (_, i) => `Step ${i + 1}: please run the parser tests again and tell me which of them fail.`).join(" ");
 const DELEGATE = "mcp__t3-code__delegate_task";
 const SEND = "mcp__t3-code__t3_thread_send";
 
@@ -28,6 +40,14 @@ const SEND = "mcp__t3-code__t3_thread_send";
 const stubSource = (calls: string) => `
 import { appendFileSync } from "node:fs";
 export default function (pi) {
+  // Leaves the branch that holds the handoff and asks Pi to summarize it.
+  pi.registerCommand("fixture-tree", {
+    description: "Fixture tree navigation.",
+    handler: async (_args, ctx) => {
+      const first = ctx.sessionManager.getEntries().find((entry) => entry.type === "message");
+      await ctx.navigateTree(first.id, { summarize: true });
+    },
+  });
   for (const [name, field] of [[${JSON.stringify(DELEGATE)}, "task"], [${JSON.stringify(SEND)}, "message"]]) {
     pi.registerTool({
       name, label: name, description: "Fixture handoff tool.",
@@ -84,6 +104,14 @@ export async function piTest(binary: string, scenario = "rewrite") {
     stub = join(home, "stub-t3-tools.ts");
   mkdirSync(agentDir);
   writeFileSync(stub, stubSource(calls));
+  // For `recheck-fails`: the guard answers its first call and fails every later one.
+  const failing = join(home, "guard-once.mjs"),
+    counter = join(home, "guard-calls");
+  writeFileSync(
+    failing,
+    `#!${process.execPath}\nimport {readFileSync,appendFileSync,existsSync} from 'node:fs';import {spawnSync} from 'node:child_process';const input=readFileSync(0,'utf8');const first=!existsSync(${JSON.stringify(counter)});appendFileSync(${JSON.stringify(counter)},'x');if(!first)process.exit(1);const r=spawnSync(${JSON.stringify(binary)},['hook'],{input,encoding:'utf8'});process.stdout.write(r.stdout??'');`,
+    { mode: 0o755 },
+  );
   const mode =
     scenario === "block" ? "block" : scenario === "observe" ? "observe" : "rewrite";
 
@@ -100,17 +128,28 @@ export async function piTest(binary: string, scenario = "rewrite") {
             (n) => [functionCall(n, SEND, { threadId: "fixture", message: ORDINARY })],
             (n) => [message(n, "OK")],
           ]
-        : [
+        : scenario === "length"
+          ? [
+              (n) => [functionCall(n, SEND, { threadId: "fixture", message: LONG })],
+              (n) => [message(n, "OK")],
+            ]
+          : [
             (n) => [functionCall(n, DELEGATE, { task: DRAFT })],
             (n) => [message(n, "OK")],
-            // Only the resume scenario gets this far, in a second process.
-            (n) => [message(n, "OK again")],
-          ];
+              // Only `resume` and `tree` get this far, in a second process.
+              (n) => [message(n, scenario === "tree" ? "The branch delegated one task." : "OK again")],
+            ];
   let turn = 0;
   const model = await scriptedModel((n, request) => {
     if (isEditorRequest(request))
       return [
-        message(n, scenario === "rewrite-fails" ? "- The recipient needs the ask.\nNo tags here." : `- The recipient needs the ask.\n<rewritten>\n${REWRITTEN}\n</rewritten>`),
+        message(
+          n,
+          scenario === "rewrite-fails"
+            ? "- The recipient needs the ask.\nNo tags here."
+            : // The editor hands back the flagged draft, so only the recheck can stop it.
+              `- The recipient needs the ask.\n<rewritten>\n${scenario === "recheck-fails" ? DRAFT : REWRITTEN}\n</rewritten>`,
+        ),
       ];
     const next = turns[turn++];
     invariant(next !== undefined, "The sender made more requests than the scenario expects");
@@ -152,7 +191,7 @@ export async function piTest(binary: string, scenario = "rewrite") {
         cwd: home,
         env: {
           ...process.env,
-          HANDOFF_GUARD_BIN: binary,
+          HANDOFF_GUARD_BIN: scenario === "recheck-fails" ? failing : binary,
           HANDOFF_GUARD_MODE: mode,
           HANDOFF_GUARD_LOG: logPath,
           HANDOFF_GUARD_MIN_REWRITE_CHARS: "400",
@@ -176,6 +215,11 @@ export async function piTest(binary: string, scenario = "rewrite") {
       invariant(file !== undefined, "Pi saved no session to resume");
       await runPi("Continue the fixture.", ["--session", join(sessions, file)]);
     }
+    if (scenario === "tree") {
+      const file = readdirSync(sessions, { recursive: true }).map(String).find((f) => f.endsWith(".jsonl"));
+      invariant(file !== undefined, "Pi saved no session to navigate");
+      await runPi("/fixture-tree", ["--session", join(sessions, file)]);
+    }
     const requests = model.requests,
       delivered = readJsonl(calls),
       log = readJsonl(logPath),
@@ -183,9 +227,8 @@ export async function piTest(binary: string, scenario = "rewrite") {
       sender = requests.filter((r) => !isEditorRequest(r)),
       outputs = toolOutputs(requests),
       deliveredText = JSON.stringify(delivered);
-    const draftStart = DRAFT.slice(0, 40);
 
-    if (scenario === "rewrite" || scenario === "resume" || scenario === "codemode") {
+    if (["rewrite", "resume", "tree", "codemode"].includes(scenario)) {
       invariant(editor.length === 1, "Expected one editor request");
       invariant(editor[0].tool_choice === "none", "The editor request allowed tool calls");
       // The editor request is the sender's own request plus one message, so the prompt cache is reused.
@@ -198,19 +241,39 @@ export async function piTest(binary: string, scenario = "rewrite") {
       );
       invariant(delivered.length === 1, "Expected one delivered handoff");
       invariant(delivered[0].params.task === REWRITTEN, "The recipient did not get the rewritten text");
-      invariant(!deliveredText.includes(draftStart), "The draft was delivered");
+      invariant(!deliveredText.includes(DRAFT), "The draft was delivered");
       invariant(log.some((r) => r.event === "rewritten"), "The rewrite was not logged");
     }
     if (scenario === "rewrite" || scenario === "resume") {
       // Every request after the handoff shows the sender the delivered text.
       for (const request of sender.slice(1)) {
         const history = historyCalls(request);
-        invariant(history.includes(REWRITTEN.slice(0, 40)), "The sender's history lacks the rewritten text");
-        invariant(!history.includes(draftStart), "The sender's history still shows its draft");
+        invariant(history.includes(REWRITTEN), "The sender's history lacks the rewritten text");
+        invariant(!history.includes(DRAFT), "The sender's history still shows its draft");
       }
     }
     if (scenario === "resume")
       invariant(sender.length === 3, "Expected a third sender request after the resume");
+    if (scenario === "length") {
+      invariant(editor.length === 1, "Expected one editor request");
+      invariant(
+        delivered.length === 1 && JSON.stringify(delivered[0].params) === JSON.stringify({ threadId: "fixture", message: REWRITTEN }),
+        "Expected the rewritten message with its other arguments unchanged",
+      );
+      invariant(log.some((r) => r.event === "rewritten" && r.guardBefore.rule === null), "Expected an unflagged draft to be rewritten");
+    }
+    if (scenario === "recheck-fails") {
+      invariant(editor.length === 1, "Expected one editor request");
+      invariant(delivered.length === 0, "A flagged handoff was delivered without a passing recheck");
+      invariant(outputs.includes("[fused_words]"), "The flagged draft was not blocked");
+    }
+    if (scenario === "tree") {
+      // The request that summarizes the abandoned branch is the last one.
+      const summary = JSON.stringify(requests.at(-1));
+      invariant(requests.length === 4, "Expected a summary request after the navigation");
+      invariant(summary.includes(REWRITTEN), "The branch summary input lacks the rewritten text");
+      invariant(!summary.includes(DRAFT), "The branch summary input shows the draft");
+    }
     if (scenario === "block") {
       invariant(editor.length === 0, "Block mode made an editor request");
       invariant(delivered.length === 1 && delivered[0].name === SEND, "Expected only the ordinary message to be delivered");

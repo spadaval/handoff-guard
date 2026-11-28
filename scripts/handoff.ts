@@ -56,7 +56,7 @@ review message ID [--context ID]
 compact                    Remove obsolete runs and reclaim pages; stop dashboard first.
 export --snapshot PATH     Explicit ignored snapshot for external tools.
 hook-test [--scenario denied|normal|startup-error|timeout|exit-one|mcp]
-pi-test [--scenario rewrite|block|rewrite-fails|observe|resume|codemode]
+pi-test [--scenario rewrite|length|block|rewrite-fails|recheck-fails|observe|resume|tree|codemode]
 
 Common: --database PATH --binary PATH --config PATH --help
 Controls remain files. Messages and derived records remain in ignored SQLite.

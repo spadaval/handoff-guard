@@ -136,10 +136,13 @@ node scripts/handoff.ts hook-test --scenario timeout
 node scripts/handoff.ts hook-test --scenario exit-one
 node scripts/handoff.ts hook-test --scenario mcp
 node scripts/handoff.ts pi-test --scenario rewrite
+node scripts/handoff.ts pi-test --scenario length
 node scripts/handoff.ts pi-test --scenario block
 node scripts/handoff.ts pi-test --scenario rewrite-fails
+node scripts/handoff.ts pi-test --scenario recheck-fails
 node scripts/handoff.ts pi-test --scenario observe
 node scripts/handoff.ts pi-test --scenario resume
+node scripts/handoff.ts pi-test --scenario tree
 node scripts/handoff.ts pi-test --scenario codemode
 ```
 
