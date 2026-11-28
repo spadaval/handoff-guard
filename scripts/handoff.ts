@@ -35,6 +35,7 @@ import {
 import { records } from "../tooling/research-store.ts";
 import { compact, exportSnapshot } from "../tooling/maintenance.ts";
 import { hookTest } from "../tooling/hook-test.ts";
+import { piTest } from "../tooling/pi-test.ts";
 const help = `Usage: npm run handoff -- COMMAND [options]
 
 migrate                    Apply checked-in migrations; adopt the existing v2 database.
@@ -55,6 +56,7 @@ review message ID [--context ID]
 compact                    Remove obsolete runs and reclaim pages; stop dashboard first.
 export --snapshot PATH     Explicit ignored snapshot for external tools.
 hook-test [--scenario denied|normal|startup-error|timeout|exit-one|mcp]
+pi-test [--scenario rewrite|block|rewrite-fails|observe|resume|codemode]
 
 Common: --database PATH --binary PATH --config PATH --help
 Controls remain files. Messages and derived records remain in ignored SQLite.
@@ -97,6 +99,10 @@ export async function main(args = process.argv.slice(2)) {
     binary = resolve(v.binary ?? join(ROOT, "target/release/handoff-guard"));
   if (command === "hook-test") {
     console.log(canonical(await hookTest(binary, v.scenario)));
+    return;
+  }
+  if (command === "pi-test") {
+    console.log(canonical(await piTest(binary, v.scenario)));
     return;
   }
   if (command === "capture")

@@ -3,7 +3,11 @@
 Block agent handoffs that are run together, oversized or repeated, and tell the
 sender how to fix them. A small Rust executable runs as a Codex `PreToolUse`
 hook. Ordinary prose, short fragments, Markdown, code, URLs, paths and hashes
-pass without any template. The guard never truncates or changes a message.
+pass without any template. The hook never truncates or changes a message.
+
+In Pi, the [Pi extension](pi-extension/README.md) runs the same checks and can
+have the sender's model rewrite a handoff before it is sent, where the hook can
+only block it.
 
 The hook is one layer. Instructions to the sender come first, and the review
 dashboard shows what still gets through. The repository contains source,
@@ -131,6 +135,12 @@ node scripts/handoff.ts hook-test --scenario startup-error
 node scripts/handoff.ts hook-test --scenario timeout
 node scripts/handoff.ts hook-test --scenario exit-one
 node scripts/handoff.ts hook-test --scenario mcp
+node scripts/handoff.ts pi-test --scenario rewrite
+node scripts/handoff.ts pi-test --scenario block
+node scripts/handoff.ts pi-test --scenario rewrite-fails
+node scripts/handoff.ts pi-test --scenario observe
+node scripts/handoff.ts pi-test --scenario resume
+node scripts/handoff.ts pi-test --scenario codemode
 ```
 
 Node 24.13 runs the TypeScript research tools and integration harness. Rust
@@ -138,10 +148,23 @@ remains the standalone installed hook. Integration tests use the actual installe
 loopback scripted Responses server, a fresh child session and a temporary
 `CODEX_HOME`. They make no remote model requests. They neither read nor modify
 the active Codex configuration. Integration fixtures use temporary files and print their results without retaining traces.
+The `pi-test` scenarios do the same for the Pi extension with the installed `pi`
+executable, and neither read nor modify the active Pi settings. Both sets of
+scenarios use `target/release/handoff-guard` unless `--binary PATH` names another build.
 
 ## Install and activate separately
 
-Build, then copy the executable to a stable absolute path:
+Which part to install depends on the client the agents run in:
+
+- **Codex:** the executable and a hook entry, described in this section. It
+  blocks flagged handoffs. Under T3 Code this covers T3 Code's delegation tools
+  too.
+- **Pi:** the executable and the extension, described in
+  [pi-extension/README.md](pi-extension/README.md). It rewrites or blocks.
+  Under T3 Code it intercepts the same T3 Code tools.
+
+Both need the executable. Build it on the machine it will run on, then copy it
+to a stable absolute path:
 
 ```sh
 install -Dm755 target/release/handoff-guard ~/.local/bin/handoff-guard

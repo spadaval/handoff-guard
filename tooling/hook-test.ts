@@ -25,8 +25,10 @@ export const SCENARIOS = [
 ];
 const BLOCKED = "Tool call blocked by PreToolUse hook:";
 
-/** A loopback Responses server. `respond(n)` returns the output items for the n-th request. */
-async function scriptedModel(respond: (n: number) => SourceRecord[]) {
+/** A loopback Responses server. `respond(n, request)` returns the output items for the n-th request. */
+export async function scriptedModel(
+  respond: (n: number, request: SourceRecord) => SourceRecord[],
+) {
   const requests: SourceRecord[] = [];
   const server = createServer(async (req, res) => {
     try {
@@ -41,7 +43,7 @@ async function scriptedModel(respond: (n: number) => SourceRecord[]) {
         );
       requests.push(data);
       const id = `resp_${requests.length}`,
-        items = respond(requests.length);
+        items = respond(requests.length, data);
       const events = [
         {
           type: "response.created",
