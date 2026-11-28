@@ -331,7 +331,10 @@ fn denial_shows_the_offending_text_and_the_rules() {
         .to_owned();
     assert!(reason.contains("[fused_words]"), "{reason}");
     assert!(reason.contains("“Pleaseinspecttheimplementationandreporttheregression”"));
-    assert!(reason.contains("Put a space between every word"));
+    assert!(reason.contains("put a space between every word"));
+    // The same block fires on long code names written without backticks, so
+    // the message has to say how to write those.
+    assert!(reason.contains("put it in backticks"));
     assert!(reason.contains("plain English"));
     assert!(reason.contains("nothing was sent"));
     // Offline evaluation never echoes message text.

@@ -58,6 +58,11 @@ still counted as fused words unless capitals break it up, as they do in
 `camelCase` and `PascalCase` identifiers. And once code spans hold half of the
 message or more, their words count toward the average word length.
 
+Code names belong in backticks. Two long names written without them are
+blocked like fused prose, and the refusal says to put code names in backticks.
+An all-lowercase name of 21 letters or more is counted as a fused run even in
+backticks, because nothing in it separates it from words run together.
+
 ### What the evidence supports
 
 [The findings](docs/findings/README.md) cover the whole corpus: how many

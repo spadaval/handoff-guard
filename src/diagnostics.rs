@@ -396,9 +396,9 @@ pub fn checks(text: &str, full_report: bool) -> Vec<Check> {
         category: "style",
         blocked,
         reason: format!(
-            "{distinct} different stretches of {FUSED_RUN_LETTERS} or more letters have no spaces in them (the longest is {longest} letters), so words are run together"
+            "{distinct} different stretches of {FUSED_RUN_LETTERS} or more letters have no spaces in them (the longest is {longest} letters), which reads as words run together"
         ),
-        fix: "Put a space between every word and say the same thing in full sentences. Do not make it terser.",
+        fix: "If these are words run together, put a space between every word and say the same thing in full sentences; do not make it terser. If one is the name of a function, type or other code symbol, put it in backticks: a camelCase or PascalCase name in backticks is not counted.",
         examples: excerpts(&chars, &runs),
         measurements: json!({"long_runs":runs.len(),"distinct_long_runs":distinct,"longest_run":longest}),
         thresholds: json!({"run_letters":FUSED_RUN_LETTERS,"minimum_distinct_runs":FUSED_RUNS,"operator":">="}),
